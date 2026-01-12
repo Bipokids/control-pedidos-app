@@ -49,28 +49,36 @@ const AppContent = () => {
   return (
     <div className="flex min-h-screen bg-slate-50 font-sans">
       
+      {/* SIDEBAR DE NAVEGACIÓN */}
       <nav className="w-20 bg-slate-900 flex flex-col items-center py-8 gap-4 fixed h-full z-40 shadow-2xl border-r border-slate-800">
         <div className="text-white font-black italic text-xs text-center mb-6 tracking-widest opacity-50">APP</div>
         
+        {/* 1. REMITOS, CONTROL SOPORTES, HISTORIAL (Solo Admin) */}
         {role === 'admin' && (
           <>
             <NavButton active={paginaActual === 'remitos'} onClick={() => setPaginaActual('remitos')} icon="🚚" label="Logística" />
+            <NavButton active={paginaActual === 'control_soportes'} onClick={() => setPaginaActual('control_soportes')} icon="🖥️" label="Admin Soportes" />
             <NavButton active={paginaActual === 'historial'} onClick={() => setPaginaActual('historial')} icon="📜" label="Historial" />
-            <NavButton active={paginaActual === 'usuarios'} onClick={() => setPaginaActual('usuarios')} icon="👥" label="Usuarios" />
           </>
         )}
 
-        <NavButton active={paginaActual === 'produccion'} onClick={() => setPaginaActual('produccion')} icon="🏭" label="Producción" />
+        {/* Separador sutil si es admin, para diferenciar de operativo */}
+        {role === 'admin' && <div className="w-8 h-[1px] bg-slate-800 my-1"></div>}
+
+        {/* 2. CONTADOR, PRODUCCIÓN, GESTIÓN SOPORTES (Todos) */}
         <NavButton active={paginaActual === 'contador'} onClick={() => setPaginaActual('contador')} icon="📊" label="Contador" />
-        
-        <div className="w-8 h-[1px] bg-slate-800 my-2"></div>
-
-        {role === 'admin' && (
-             <NavButton active={paginaActual === 'control_soportes'} onClick={() => setPaginaActual('control_soportes')} icon="🖥️" label="Admin Soportes" />
-        )}
-
+        <NavButton active={paginaActual === 'produccion'} onClick={() => setPaginaActual('produccion')} icon="🏭" label="Producción" />
         <NavButton active={paginaActual === 'gestion_soportes'} onClick={() => setPaginaActual('gestion_soportes')} icon="🛠️" label="Gestión Técnica" />
 
+        {/* 3. USUARIOS (Solo Admin) - Separado al final */}
+        {role === 'admin' && (
+           <>
+             <div className="w-8 h-[1px] bg-slate-800 my-1"></div>
+             <NavButton active={paginaActual === 'usuarios'} onClick={() => setPaginaActual('usuarios')} icon="👥" label="Usuarios" />
+           </>
+        )}
+
+        {/* 4. CERRAR SESIÓN (Abajo del todo) */}
         <div className="mt-auto">
              <button onClick={logout} className="w-10 h-10 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors" title="Cerrar Sesión">
                 ✕
@@ -78,15 +86,17 @@ const AppContent = () => {
         </div>
       </nav>
 
+      {/* ÁREA DE CONTENIDO */}
       <main className="flex-1 ml-20 transition-all duration-300">
         {paginaActual === 'remitos' && role === 'admin' && <ControlDeRemitos />}
-        {paginaActual === 'historial' && role === 'admin' && <HistorialDespachos />}
-        {paginaActual === 'usuarios' && role === 'admin' && <Usuarios />}
         {paginaActual === 'control_soportes' && role === 'admin' && <ControlSoportes />}
+        {paginaActual === 'historial' && role === 'admin' && <HistorialDespachos />}
         
-        {paginaActual === 'produccion' && <PantallaProduccion />}
         {paginaActual === 'contador' && <ContadorArmados />}
+        {paginaActual === 'produccion' && <PantallaProduccion />}
         {paginaActual === 'gestion_soportes' && <GestionSoportes />}
+        
+        {paginaActual === 'usuarios' && role === 'admin' && <Usuarios />}
       </main>
 
     </div>
