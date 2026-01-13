@@ -175,7 +175,7 @@ const ControlDeRemitos: React.FC = () => {
                     <div className="grid grid-cols-4 gap-2">
                         <StatCard label="Pendientes" val={rPendientes} color="border-yellow-400" />
                         <StatCard label="Producción" val={rProduccion} color="border-green-500" />
-                        <StatCard label="Despacho" val={rDespacho} color="border-blue-500" />
+                        <StatCard label="Listos" val={rDespacho} color="border-blue-500" />
                         {/* Nuevo contador Remitos */}
                         <StatCard label="Sin Fecha" val={rListosSinFecha} color="border-purple-500" />
                     </div>
