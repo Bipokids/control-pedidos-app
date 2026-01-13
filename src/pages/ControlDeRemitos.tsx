@@ -14,7 +14,7 @@ const ControlDeRemitos: React.FC = () => {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [modalFirma, setModalFirma] = useState<{ open: boolean, data: any, type: 'remito' | 'soporte' }>({ open: false, data: null, type: 'remito' });
     
-    // NUEVO ESTADO: CONTROLAR SI LA TABLA SE VE O NO
+    // CONTROLAR SI LA TABLA SE VE O NO
     const [tablaExpandida, setTablaExpandida] = useState(true);
 
     // ESTADOS SIDEBAR (FORMULARIOS)
@@ -52,7 +52,24 @@ const ControlDeRemitos: React.FC = () => {
     const rPendientes = Object.values(remitos).filter(r => r.estadoPreparacion !== "Entregado").length;
     const rProduccion = Object.values(remitos).filter(r => r.produccion && r.estado === "Listo" && r.estadoPreparacion !== "Entregado").length;
     const rDespacho = Object.values(remitos).filter(r => r.estadoPreparacion === "Listo").length;
-    const rListosSinFecha = Object.values(remitos).filter(r => r.estadoPreparacion === "Listo" && (!r.rangoDespacho || r.rangoDespacho === "")).length;
+    
+    // --- LÓGICA CORREGIDA "SIN FECHA" ---
+    const rListosSinFecha = Object.values(remitos).filter(r => {
+        // 1. Si ya se entregó, no cuenta
+        if (r.estadoPreparacion === "Entregado") return false;
+
+        // 2. Si TIENE rango asignado, no cuenta
+        if (r.rangoDespacho && r.rangoDespacho !== "") return false;
+
+        // 3. Casos de Alerta (Sin fecha):
+        if (r.produccion) {
+            // A. PRODUCCIÓN: Cuenta si Producción ya terminó (Listo) y falta asignar fecha
+            return r.estado === "Listo";
+        } else {
+            // B. STOCK: Cuenta si está PENDIENTE (necesita fecha para que sepan cuándo armarlo)
+            return r.estadoPreparacion === "Pendiente";
+        }
+    }).length;
 
     const sPendientes = Object.values(soportes).filter(s => s.estado === "Pendiente").length;
     const sResueltos = Object.values(soportes).filter(s => s.estado === "Resuelto").length;
@@ -210,16 +227,37 @@ const ControlDeRemitos: React.FC = () => {
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {remitosFiltrados.map(([id, r], index) => {
-                                    let bgClass = index % 2 === 0 ? 'bg-white' : 'bg-gray-50'; // Zebra default
-                                    // 1. Despachado (Celeste)
-                                    if (r.estadoPreparacion === 'Despachado') bgClass = 'bg-cyan-100 text-cyan-900';
-                                    // 2. Producción Listo (Amarillo)
-                                    else if (r.produccion && r.estado === 'Listo') bgClass = 'bg-yellow-100 text-yellow-900';
-                                    // 3. Preparación Listo (Verde o Violeta)
-                                    if (r.estadoPreparacion === 'Listo') {
-                                        bgClass = 'bg-green-100 text-green-900';
-                                        if (!r.rangoDespacho || r.rangoDespacho === "") bgClass = 'bg-purple-100 text-purple-900';
+                                    let bgClass = index % 2 === 0 ? 'bg-white' : 'bg-gray-50'; // Default
+                                    const sinRango = !r.rangoDespacho || r.rangoDespacho === "";
+
+                                    // --- LÓGICA DE COLORES DE FILA ---
+                                    
+                                    // 1. DESPACHADO (Celeste - Prioridad Máxima)
+                                    if (r.estadoPreparacion === 'Despachado') {
+                                        bgClass = 'bg-cyan-100 text-cyan-900';
+                                    } 
+                                    else {
+                                        // CASO A: CON PRODUCCIÓN
+                                        if (r.produccion) {
+                                            if (r.estado === 'Listo') {
+                                                if (sinRango) bgClass = 'bg-purple-100 text-purple-900'; // ALERTA
+                                                else if (r.estadoPreparacion === 'Listo') bgClass = 'bg-green-100 text-green-900';
+                                                else bgClass = 'bg-yellow-100 text-yellow-900';
+                                            }
+                                        }
+                                        // CASO B: STOCK (Sin producción)
+                                        else {
+                                            // Si es stock y está pendiente sin rango => VIOLETA (ALERTA)
+                                            if (r.estadoPreparacion === 'Pendiente' && sinRango) {
+                                                bgClass = 'bg-purple-100 text-purple-900';
+                                            }
+                                            // Si ya se preparó => VERDE
+                                            else if (r.estadoPreparacion === 'Listo') {
+                                                bgClass = 'bg-green-100 text-green-900';
+                                            }
+                                        }
                                     }
+
                                     const borderClass = r.prioridad ? 'border-l-4 border-red-500' : '';
 
                                     return (
