@@ -73,6 +73,7 @@ const AppContent = () => {
       
       {/* SIDEBAR DE NAVEGACIÓN */}
       <nav className="w-24 bg-slate-900 flex flex-col items-center py-6 gap-3 fixed h-full z-40 shadow-2xl border-r border-slate-800 overflow-y-auto scrollbar-hide">
+        <div className="text-white font-black italic text-xl text-center mb-1 tracking-widest opacity-50">BK</div>
         
         {/* 1. GRUPO ADMIN: Logística, Soportes, Historial, Estadísticas */}
         {role === 'admin' && (
