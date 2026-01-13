@@ -50,10 +50,14 @@ const ControlDeRemitos: React.FC = () => {
     const rPendientes = Object.values(remitos).filter(r => r.estadoPreparacion !== "Entregado").length;
     const rProduccion = Object.values(remitos).filter(r => r.produccion && r.estado === "Listo" && r.estadoPreparacion !== "Entregado").length;
     const rDespacho = Object.values(remitos).filter(r => r.estadoPreparacion === "Listo").length;
+    // NUEVO: Listos sin rango asignado
+    const rListosSinFecha = Object.values(remitos).filter(r => r.estadoPreparacion === "Listo" && (!r.rangoDespacho || r.rangoDespacho === "")).length;
 
     // -- Soportes
     const sPendientes = Object.values(soportes).filter(s => s.estado === "Pendiente").length;
     const sResueltos = Object.values(soportes).filter(s => s.estado === "Resuelto").length;
+    // NUEVO: Resueltos sin rango asignado
+    const sResueltosSinFecha = Object.values(soportes).filter(s => s.estado === "Resuelto" && (!s.rangoEntrega || s.rangoEntrega === "")).length;
 
     // 3. FILTRADO TABLA PRINCIPAL (Solo Remitos Pendientes)
     const remitosFiltrados = Object.entries(remitos).filter(([_id, r]) => {
@@ -68,7 +72,7 @@ const ControlDeRemitos: React.FC = () => {
             ...r, 
             id, 
             _type: 'remito',
-            displayNumero: r.numeroRemito // Estandarizamos nombre para mostrar
+            displayNumero: r.numeroRemito 
         }));
     
     const entregadosSoportes = Object.entries(soportes)
@@ -77,12 +81,10 @@ const ControlDeRemitos: React.FC = () => {
             ...s, 
             id, 
             _type: 'soporte', 
-            displayNumero: s.numeroSoporte, // Estandarizamos nombre para mostrar
-            // Usamos 'as any' para evitar error TS si types no está actualizado aún
+            displayNumero: s.numeroSoporte, 
             clienteFirma: (s as any).clienteFirma 
         }));
 
-    // Unimos y ordenamos (opcionalmente podrías ordenar por fecha)
     const todosEntregados = [...entregadosRemitos, ...entregadosSoportes];
 
     // 5. FUNCIONES DE GESTIÓN
@@ -169,20 +171,24 @@ const ControlDeRemitos: React.FC = () => {
                 {/* Columna 1: Logística */}
                 <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Logística (Remitos)</h3>
-                    <div className="grid grid-cols-3 gap-2">
+                    {/* Ajuste de columnas para que entren 4 items */}
+                    <div className="grid grid-cols-4 gap-2">
                         <StatCard label="Pendientes" val={rPendientes} color="border-yellow-400" />
                         <StatCard label="Producción" val={rProduccion} color="border-green-500" />
                         <StatCard label="Despacho" val={rDespacho} color="border-blue-500" />
+                        {/* Nuevo contador Remitos */}
+                        <StatCard label="Sin Fecha" val={rListosSinFecha} color="border-purple-500" />
                     </div>
                 </div>
 
-                {/* Columna 2: Soportes (Sin 'En Taller') */}
+                {/* Columna 2: Soportes */}
                 <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Servicio Técnico</h3>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                         <StatCard label="Pendientes" val={sPendientes} color="border-orange-400" />
-                        {/* Se eliminó "En Taller" */}
                         <StatCard label="Resueltos" val={sResueltos} color="border-emerald-500" />
+                        {/* Nuevo contador Soportes */}
+                        <StatCard label="Sin Fecha" val={sResueltosSinFecha} color="border-purple-500" />
                     </div>
                 </div>
             </div>
@@ -208,30 +214,37 @@ const ControlDeRemitos: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                            {remitosFiltrados.map(([id, r]) => (
-                                <tr key={id} className={`hover:bg-blue-50/20 transition-colors text-[11px] font-bold ${r.prioridad ? 'bg-red-50/10' : ''}`}>
-                                    <td className="p-5 font-mono text-blue-500">#{r.numeroRemito}</td>
-                                    <td className="p-5 uppercase text-gray-800">{r.cliente}</td>
-                                    <td className="p-5 text-center">
-                                        <input type="checkbox" checked={r.produccion} onChange={(e) => update(ref(db_realtime, `remitos/${id}`), { produccion: e.target.checked })} className="w-4 h-4 rounded border-slate-300 text-blue-600" />
-                                    </td>
-                                    <td className="p-5 text-center">
-                                        {r.produccion && <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase shadow-sm ${r.estado === 'Listo' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{r.estado || 'PENDIENTE'}</span>}
-                                    </td>
-                                    <td className="p-5 text-center">
-                                        <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase shadow-sm ${r.estadoPreparacion === 'Listo' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>{r.estadoPreparacion || 'PENDIENTE'}</span>
-                                    </td>
-                                    <td className="p-5 text-center">
-                                        <button onClick={() => update(ref(db_realtime, `remitos/${id}`), { prioridad: !r.prioridad })} className={`text-lg transition-transform active:scale-90 ${r.prioridad ? 'grayscale-0' : 'grayscale opacity-20'}`}>🔥</button>
-                                    </td>
-                                    <td className="p-5 text-center">
-                                        <select value={r.rangoDespacho || ""} onChange={(e) => update(ref(db_realtime, `remitos/${id}`), { rangoDespacho: e.target.value })} className="bg-gray-50 border border-gray-100 rounded-xl p-2 text-[10px] font-black uppercase outline-none">
-                                            <option value="">-- SELECCIONAR --</option>
-                                            {rangos.map(rng => <option key={rng} value={rng}>{rng}</option>)}
-                                        </select>
-                                    </td>
-                                </tr>
-                            ))}
+                            {remitosFiltrados.map(([id, r], index) => {
+                                // Lógica de zebra striping: Si es prioridad, fondo rojo. Si no, alterna blanco/gris claro
+                                const bgClass = r.prioridad 
+                                    ? 'bg-red-50/20' 
+                                    : (index % 2 === 0 ? 'bg-white' : 'bg-gray-100');
+
+                                return (
+                                    <tr key={id} className={`hover:bg-blue-50/20 transition-colors text-[11px] font-bold ${bgClass}`}>
+                                        <td className="p-5 font-mono text-blue-500">#{r.numeroRemito}</td>
+                                        <td className="p-5 uppercase text-gray-800">{r.cliente}</td>
+                                        <td className="p-5 text-center">
+                                            <input type="checkbox" checked={r.produccion} onChange={(e) => update(ref(db_realtime, `remitos/${id}`), { produccion: e.target.checked })} className="w-4 h-4 rounded border-slate-300 text-blue-600" />
+                                        </td>
+                                        <td className="p-5 text-center">
+                                            {r.produccion && <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase shadow-sm ${r.estado === 'Listo' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{r.estado || 'PENDIENTE'}</span>}
+                                        </td>
+                                        <td className="p-5 text-center">
+                                            <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase shadow-sm ${r.estadoPreparacion === 'Listo' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>{r.estadoPreparacion || 'PENDIENTE'}</span>
+                                        </td>
+                                        <td className="p-5 text-center">
+                                            <button onClick={() => update(ref(db_realtime, `remitos/${id}`), { prioridad: !r.prioridad })} className={`text-lg transition-transform active:scale-90 ${r.prioridad ? 'grayscale-0' : 'grayscale opacity-20'}`}>🔥</button>
+                                        </td>
+                                        <td className="p-5 text-center">
+                                            <select value={r.rangoDespacho || ""} onChange={(e) => update(ref(db_realtime, `remitos/${id}`), { rangoDespacho: e.target.value })} className="bg-gray-50 border border-gray-100 rounded-xl p-2 text-[10px] font-black uppercase outline-none">
+                                                <option value="">-- SELECCIONAR --</option>
+                                                {rangos.map(rng => <option key={rng} value={rng}>{rng}</option>)}
+                                            </select>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
@@ -271,7 +284,7 @@ const ControlDeRemitos: React.FC = () => {
                                             ))
                                         }
 
-                                        {/* 2. SOPORTES (TÉCNICO) - NUEVO BLOQUE */}
+                                        {/* 2. SOPORTES (TÉCNICO) */}
                                         {Object.entries(soportes)
                                             .filter(([,s]) => s.rangoEntrega === match && s.estado !== "Entregado")
                                             .map(([id,s]) => (
