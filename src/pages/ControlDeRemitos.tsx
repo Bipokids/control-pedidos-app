@@ -13,6 +13,9 @@ const ControlDeRemitos: React.FC = () => {
     const [filtro, setFiltro] = useState("");
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [modalFirma, setModalFirma] = useState<{ open: boolean, data: any, type: 'remito' | 'soporte' }>({ open: false, data: null, type: 'remito' });
+    
+    // NUEVO ESTADO: CONTROLAR SI LA TABLA SE VE O NO
+    const [tablaExpandida, setTablaExpandida] = useState(true);
 
     // ESTADOS SIDEBAR (FORMULARIOS)
     const [tipoCarga, setTipoCarga] = useState<'remito' | 'soporte' | ''>('');
@@ -46,44 +49,29 @@ const ControlDeRemitos: React.FC = () => {
     }, []);
 
     // 2. CÁLCULO DE CONTADORES
-    // -- Remitos
     const rPendientes = Object.values(remitos).filter(r => r.estadoPreparacion !== "Entregado").length;
     const rProduccion = Object.values(remitos).filter(r => r.produccion && r.estado === "Listo" && r.estadoPreparacion !== "Entregado").length;
     const rDespacho = Object.values(remitos).filter(r => r.estadoPreparacion === "Listo").length;
-    // NUEVO: Listos sin rango asignado
     const rListosSinFecha = Object.values(remitos).filter(r => r.estadoPreparacion === "Listo" && (!r.rangoDespacho || r.rangoDespacho === "")).length;
 
-    // -- Soportes
     const sPendientes = Object.values(soportes).filter(s => s.estado === "Pendiente").length;
     const sResueltos = Object.values(soportes).filter(s => s.estado === "Resuelto").length;
-    // NUEVO: Resueltos sin rango asignado
     const sResueltosSinFecha = Object.values(soportes).filter(s => s.estado === "Resuelto" && (!s.rangoEntrega || s.rangoEntrega === "")).length;
 
-    // 3. FILTRADO TABLA PRINCIPAL (Solo Remitos Pendientes)
+    // 3. FILTRADO TABLA PRINCIPAL
     const remitosFiltrados = Object.entries(remitos).filter(([_id, r]) => {
         const match = r.cliente?.toLowerCase().includes(filtro.toLowerCase()) || r.numeroRemito?.toString().includes(filtro);
         return match && r.estadoPreparacion !== "Entregado";
     });
 
-    // 4. ENTREGADOS (Combinados Remitos + Soportes)
+    // 4. ENTREGADOS
     const entregadosRemitos = Object.entries(remitos)
         .filter(([_id, r]) => r.estadoPreparacion === "Entregado")
-        .map(([id, r]) => ({ 
-            ...r, 
-            id, 
-            _type: 'remito',
-            displayNumero: r.numeroRemito 
-        }));
+        .map(([id, r]) => ({ ...r, id, _type: 'remito', displayNumero: r.numeroRemito }));
     
     const entregadosSoportes = Object.entries(soportes)
         .filter(([_id, s]) => s.estado === "Entregado")
-        .map(([id, s]) => ({ 
-            ...s, 
-            id, 
-            _type: 'soporte', 
-            displayNumero: s.numeroSoporte, 
-            clienteFirma: (s as any).clienteFirma 
-        }));
+        .map(([id, s]) => ({ ...s, id, _type: 'soporte', displayNumero: s.numeroSoporte, clienteFirma: (s as any).clienteFirma }));
 
     const todosEntregados = [...entregadosRemitos, ...entregadosSoportes];
 
@@ -123,7 +111,6 @@ const ControlDeRemitos: React.FC = () => {
                         if (codigo && !isNaN(cantidad)) articulos.push({ codigo, cantidad, detalle: "" });
                     }
                 });
-                
                 if (aclaracionesRaw) {
                     const lineasAclara = aclaracionesRaw.split(/\r?\n|\/\//).map(l => l.trim()).filter(Boolean);
                     lineasAclara.forEach(linea => {
@@ -136,13 +123,11 @@ const ControlDeRemitos: React.FC = () => {
                         });
                     });
                 }
-
                 await push(ref(db_realtime, 'remitos'), {
                     numeroRemito, fechaEmision, cliente, articulos, aclaraciones: aclaracionesRaw,
                     produccion: necesitaProduccion, esTransporte, estado: null, estadoPreparacion: "Pendiente",
                     rangoDespacho: "", timestamp: new Date().toISOString()
                 });
-
             } else {
                 await push(ref(db_realtime, 'soportes'), {
                     numeroSoporte: soporteData.numero, cliente: soporteData.cliente,
@@ -166,89 +151,107 @@ const ControlDeRemitos: React.FC = () => {
                 <p className="text-slate-500 font-bold text-xs uppercase tracking-widest mt-2">Logística y monitoreo centralizado</p>
             </div>
 
-            {/* CONTADORES (SEPARADOS Y COMPACTOS) */}
+            {/* CONTADORES */}
             <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Columna 1: Logística */}
                 <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Logística (Remitos)</h3>
-                    {/* Ajuste de columnas para que entren 4 items */}
                     <div className="grid grid-cols-4 gap-2">
-                        <StatCard label="Pendientes" val={rPendientes} color="border-yellow-400" />
-                        <StatCard label="Producción" val={rProduccion} color="border-green-500" />
-                        <StatCard label="Listos" val={rDespacho} color="border-blue-500" />
-                        {/* Nuevo contador Remitos */}
+                        <StatCard label="Pendientes" val={rPendientes} color="border-orange-300" />
+                        <StatCard label="Producción" val={rProduccion} color="border-yellow-400" />
+                        <StatCard label="Listos" val={rDespacho} color="border-green-500" />
                         <StatCard label="Sin Fecha" val={rListosSinFecha} color="border-purple-500" />
                     </div>
                 </div>
-
-                {/* Columna 2: Soportes */}
                 <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Servicio Técnico</h3>
                     <div className="grid grid-cols-3 gap-2">
                         <StatCard label="Pendientes" val={sPendientes} color="border-orange-400" />
                         <StatCard label="Resueltos" val={sResueltos} color="border-emerald-500" />
-                        {/* Nuevo contador Soportes */}
                         <StatCard label="Sin Fecha" val={sResueltosSinFecha} color="border-purple-500" />
                     </div>
                 </div>
             </div>
 
             {/* BUSCADOR */}
-            <section className="mb-8">
+            <section className="mb-4">
                 <input type="text" placeholder="🔍 BUSCAR POR CLIENTE, N° REMITO O ZONA..." value={filtro} onChange={(e) => setFiltro(e.target.value)} className="w-full p-5 bg-white border-2 border-slate-100 rounded-[2rem] shadow-sm focus:border-blue-500 outline-none font-bold text-sm uppercase italic" />
             </section>
 
-            {/* TABLA PRINCIPAL (REMITOS) */}
-            <section className="bg-white rounded-[2.5rem] shadow-xl shadow-blue-900/5 border border-slate-100 overflow-hidden mb-12">
-                <div className="overflow-x-auto">
-                    <table className="min-w-full text-left">
-                        <thead>
-                            <tr className="bg-slate-50/50 text-gray-400 font-black uppercase text-[10px] tracking-widest border-b border-slate-100">
-                                <th className="p-5">N° Remito</th>
-                                <th className="p-5">Cliente</th>
-                                <th className="p-5 text-center">Producción</th>
-                                <th className="p-5 text-center">Estado Prod.</th>
-                                <th className="p-5 text-center">Preparación</th>
-                                <th className="p-5 text-center">Prioridad</th>
-                                <th className="p-5 text-center">Rango Despacho</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                            {remitosFiltrados.map(([id, r], index) => {
-                                // Lógica de zebra striping: Si es prioridad, fondo rojo. Si no, alterna blanco/gris claro
-                                const bgClass = r.prioridad 
-                                    ? 'bg-red-50/20' 
-                                    : (index % 2 === 0 ? 'bg-white' : 'bg-gray-100');
+            {/* BOTÓN COLAPSAR / EXPANDIR TABLA */}
+            <div className="flex justify-between items-center mb-4 px-2">
+                <h3 className="text-xl font-black italic uppercase text-slate-400 flex items-center gap-2">
+                    <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                    Listado de Pedidos ({remitosFiltrados.length})
+                </h3>
+                <button 
+                    onClick={() => setTablaExpandida(!tablaExpandida)}
+                    className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl shadow-sm hover:bg-slate-50 transition-all font-bold text-xs uppercase text-slate-600"
+                >
+                    {tablaExpandida ? 'Contraer' : 'Desplegar'}
+                    <span className={`text-lg transition-transform duration-300 ${tablaExpandida ? 'rotate-180' : 'rotate-0'}`}>▼</span>
+                </button>
+            </div>
 
-                                return (
-                                    <tr key={id} className={`hover:bg-blue-50/20 transition-colors text-[11px] font-bold ${bgClass}`}>
-                                        <td className="p-5 font-mono text-blue-500">#{r.numeroRemito}</td>
-                                        <td className="p-5 uppercase text-gray-800">{r.cliente}</td>
-                                        <td className="p-5 text-center">
-                                            <input type="checkbox" checked={r.produccion} onChange={(e) => update(ref(db_realtime, `remitos/${id}`), { produccion: e.target.checked })} className="w-4 h-4 rounded border-slate-300 text-blue-600" />
-                                        </td>
-                                        <td className="p-5 text-center">
-                                            {r.produccion && <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase shadow-sm ${r.estado === 'Listo' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{r.estado || 'PENDIENTE'}</span>}
-                                        </td>
-                                        <td className="p-5 text-center">
-                                            <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase shadow-sm ${r.estadoPreparacion === 'Listo' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>{r.estadoPreparacion || 'PENDIENTE'}</span>
-                                        </td>
-                                        <td className="p-5 text-center">
-                                            <button onClick={() => update(ref(db_realtime, `remitos/${id}`), { prioridad: !r.prioridad })} className={`text-lg transition-transform active:scale-90 ${r.prioridad ? 'grayscale-0' : 'grayscale opacity-20'}`}>🔥</button>
-                                        </td>
-                                        <td className="p-5 text-center">
-                                            <select value={r.rangoDespacho || ""} onChange={(e) => update(ref(db_realtime, `remitos/${id}`), { rangoDespacho: e.target.value })} className="bg-gray-50 border border-gray-100 rounded-xl p-2 text-[10px] font-black uppercase outline-none">
-                                                <option value="">-- SELECCIONAR --</option>
-                                                {rangos.map(rng => <option key={rng} value={rng}>{rng}</option>)}
-                                            </select>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+            {/* TABLA PRINCIPAL (DESPLEGABLE) */}
+            {tablaExpandida && (
+                <section className="bg-white rounded-[2.5rem] shadow-xl shadow-blue-900/5 border border-slate-100 overflow-hidden mb-12 animate-in slide-in-from-top-4 fade-in duration-300">
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full text-left">
+                            <thead>
+                                <tr className="bg-slate-50/50 text-gray-400 font-black uppercase text-[10px] tracking-widest border-b border-slate-100">
+                                    <th className="p-5">N° Remito</th>
+                                    <th className="p-5">Cliente</th>
+                                    <th className="p-5 text-center">Producción</th>
+                                    <th className="p-5 text-center">Estado Prod.</th>
+                                    <th className="p-5 text-center">Preparación</th>
+                                    <th className="p-5 text-center">Prioridad</th>
+                                    <th className="p-5 text-center">Rango Despacho</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {remitosFiltrados.map(([id, r], index) => {
+                                    let bgClass = index % 2 === 0 ? 'bg-white' : 'bg-gray-50'; // Zebra default
+                                    // 1. Despachado (Celeste)
+                                    if (r.estadoPreparacion === 'Despachado') bgClass = 'bg-cyan-100 text-cyan-900';
+                                    // 2. Producción Listo (Amarillo)
+                                    else if (r.produccion && r.estado === 'Listo') bgClass = 'bg-yellow-100 text-yellow-900';
+                                    // 3. Preparación Listo (Verde o Violeta)
+                                    if (r.estadoPreparacion === 'Listo') {
+                                        bgClass = 'bg-green-100 text-green-900';
+                                        if (!r.rangoDespacho || r.rangoDespacho === "") bgClass = 'bg-purple-100 text-purple-900';
+                                    }
+                                    const borderClass = r.prioridad ? 'border-l-4 border-red-500' : '';
+
+                                    return (
+                                        <tr key={id} className={`hover:bg-slate-200 transition-colors text-[11px] font-bold ${bgClass} ${borderClass}`}>
+                                            <td className="p-5 font-mono">#{r.numeroRemito}</td>
+                                            <td className="p-5 uppercase">{r.cliente}</td>
+                                            <td className="p-5 text-center">
+                                                <input type="checkbox" checked={r.produccion} onChange={(e) => update(ref(db_realtime, `remitos/${id}`), { produccion: e.target.checked })} className="w-4 h-4 rounded border-slate-300 text-blue-600" />
+                                            </td>
+                                            <td className="p-5 text-center">
+                                                {r.produccion && <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase shadow-sm ${r.estado === 'Listo' ? 'bg-green-500 text-white' : 'bg-yellow-200 text-yellow-800'}`}>{r.estado || 'PENDIENTE'}</span>}
+                                            </td>
+                                            <td className="p-5 text-center">
+                                                <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase shadow-sm bg-white/50 border border-slate-200`}>{r.estadoPreparacion || 'PENDIENTE'}</span>
+                                            </td>
+                                            <td className="p-5 text-center">
+                                                <button onClick={() => update(ref(db_realtime, `remitos/${id}`), { prioridad: !r.prioridad })} className={`text-lg transition-transform active:scale-90 ${r.prioridad ? 'grayscale-0' : 'grayscale opacity-20'}`}>🔥</button>
+                                            </td>
+                                            <td className="p-5 text-center">
+                                                <select value={r.rangoDespacho || ""} onChange={(e) => update(ref(db_realtime, `remitos/${id}`), { rangoDespacho: e.target.value })} className="bg-white/50 border border-slate-300 rounded-xl p-2 text-[10px] font-black uppercase outline-none focus:bg-white">
+                                                    <option value="">-- SELECCIONAR --</option>
+                                                    {rangos.map(rng => <option key={rng} value={rng}>{rng}</option>)}
+                                                </select>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            )}
 
             {/* TABLA SEMANAL */}
             <h3 className="text-xl font-black italic uppercase mb-6 ml-4 text-gray-800 tracking-tighter">Cronograma Semanal</h3>
@@ -259,7 +262,6 @@ const ControlDeRemitos: React.FC = () => {
                         {["Mañana", "Tarde"].map(bloque => {
                             const diaFix = dia === "MIERCOLES" ? "Miércoles" : dia.charAt(0) + dia.slice(1).toLowerCase();
                             const match = `${diaFix} ${bloque}`;
-                            
                             return (
                                 <div 
                                     key={bloque} 
@@ -269,32 +271,14 @@ const ControlDeRemitos: React.FC = () => {
                                         if(val) set(ref(db_realtime, `tablaManual/${diaFix}_${bloque}/${Date.now()}`), { text: val });
                                     }}
                                 >
-                                    <p className="text-[10px] font-black text-blue-500 uppercase mb-3 tracking-widest text-center">
-                                        {bloque}
-                                    </p>
-                                    
+                                    <p className="text-[10px] font-black text-blue-500 uppercase mb-3 tracking-widest text-center">{bloque}</p>
                                     <div className="flex flex-col gap-2">
-                                        {/* 1. REMITOS (LOGÍSTICA) */}
-                                        {Object.entries(remitos)
-                                            .filter(([,r]) => r.rangoDespacho === match && r.estadoPreparacion !== "Entregado")
-                                            .map(([id,r]) => (
-                                                <span key={id} className={`px-3 py-2 rounded-xl text-[9px] font-black border-l-4 shadow-sm ${r.prioridad ? 'bg-red-50 text-red-700 border-red-500' : 'bg-blue-50 text-blue-700 border-blue-400'}`}>
-                                                    {r.cliente}
-                                                </span>
-                                            ))
-                                        }
-
-                                        {/* 2. SOPORTES (TÉCNICO) */}
-                                        {Object.entries(soportes)
-                                            .filter(([,s]) => s.rangoEntrega === match && s.estado !== "Entregado")
-                                            .map(([id,s]) => (
-                                                <span key={id} className="px-3 py-2 rounded-xl text-[9px] font-black border-l-4 bg-orange-50 text-orange-700 border-orange-500 shadow-sm flex items-center gap-2">
-                                                    <span>🛠️</span> {s.cliente}
-                                                </span>
-                                            ))
-                                        }
-
-                                        {/* 3. NOTAS MANUALES */}
+                                        {Object.entries(remitos).filter(([,r]) => r.rangoDespacho === match && r.estadoPreparacion !== "Entregado").map(([id,r]) => (
+                                            <span key={id} className={`px-3 py-2 rounded-xl text-[9px] font-black border-l-4 shadow-sm ${r.prioridad ? 'bg-red-50 text-red-700 border-red-500' : 'bg-blue-50 text-blue-700 border-blue-400'}`}>{r.cliente}</span>
+                                        ))}
+                                        {Object.entries(soportes).filter(([,s]) => s.rangoEntrega === match && s.estado !== "Entregado").map(([id,s]) => (
+                                            <span key={id} className="px-3 py-2 rounded-xl text-[9px] font-black border-l-4 bg-orange-50 text-orange-700 border-orange-500 shadow-sm flex items-center gap-2"><span>🛠️</span> {s.cliente}</span>
+                                        ))}
                                         {tablaManual[`${diaFix}_${bloque}`] && Object.entries(tablaManual[`${diaFix}_${bloque}`]).map(([mId,m]:any) => (
                                             <span key={mId} className="px-3 py-2 rounded-xl text-[9px] font-black bg-amber-50 text-amber-700 border-l-4 border-amber-400 italic flex justify-between group">
                                                 {m.text}
@@ -309,7 +293,7 @@ const ControlDeRemitos: React.FC = () => {
                 ))}
             </div>
 
-            {/* SECCIÓN ENTREGADOS (REMITOS Y SOPORTES) */}
+            {/* SECCIÓN ENTREGADOS */}
             <section>
                 <h3 className="text-xl font-black italic uppercase mb-6 ml-4 text-slate-400 flex items-center gap-2">
                     <span className="w-2 h-2 bg-green-500 rounded-full"></span>
@@ -322,9 +306,7 @@ const ControlDeRemitos: React.FC = () => {
                                 <div key={item.id} className="p-4 bg-slate-50 rounded-2xl flex justify-between items-center border border-slate-100 group hover:border-slate-300 transition-colors">
                                     <div>
                                         <div className="flex gap-2 items-center mb-1">
-                                            <span className={`text-[9px] font-black px-2 py-0.5 rounded text-white ${item._type === 'remito' ? 'bg-blue-400' : 'bg-orange-400'}`}>
-                                                {item._type === 'remito' ? 'REMITO' : 'SOPORTE'}
-                                            </span>
+                                            <span className={`text-[9px] font-black px-2 py-0.5 rounded text-white ${item._type === 'remito' ? 'bg-blue-400' : 'bg-orange-400'}`}>{item._type === 'remito' ? 'REMITO' : 'SOPORTE'}</span>
                                             <span className="text-[10px] font-black text-slate-400">#{item.displayNumero}</span>
                                         </div>
                                         <p className="font-bold text-slate-800 text-sm uppercase truncate max-w-[150px]">{item.cliente}</p>
@@ -349,7 +331,6 @@ const ControlDeRemitos: React.FC = () => {
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" onClick={() => setModalFirma({...modalFirma, open: false})}>
                     <div className="bg-white rounded-[2rem] p-8 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
                         <h3 className="text-xl font-black text-slate-800 uppercase italic mb-4 text-center">Comprobante de Entrega</h3>
-                        
                         {modalFirma.data.clienteFirma ? (
                             <div className="space-y-4">
                                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-center">
@@ -381,7 +362,6 @@ const ControlDeRemitos: React.FC = () => {
                             <h2 className="text-2xl font-black italic uppercase text-slate-800 tracking-tighter">Carga de Datos</h2>
                             <button onClick={() => setSidebarOpen(false)} className="text-slate-300 hover:text-slate-800 text-xl font-bold">✕</button>
                         </div>
-                        
                         <div className="space-y-6">
                             <div>
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-2">Tipo de carga</label>
@@ -391,7 +371,6 @@ const ControlDeRemitos: React.FC = () => {
                                     <option value="soporte">Soporte</option>
                                 </select>
                             </div>
-
                             {tipoCarga === 'remito' && (
                                 <div className="space-y-6 animate-in fade-in duration-500">
                                     <div>
@@ -418,7 +397,6 @@ const ControlDeRemitos: React.FC = () => {
                                     </div>
                                 </div>
                             )}
-
                             {tipoCarga === 'soporte' && (
                                 <div className="space-y-4 animate-in fade-in duration-500">
                                     <input type="text" placeholder="N° SOPORTE" className="w-full p-4 bg-slate-50 rounded-2xl font-bold uppercase text-sm border-slate-100" value={soporteData.numero} onChange={e => setSoporteData({...soporteData, numero: e.target.value})} />
@@ -427,7 +405,6 @@ const ControlDeRemitos: React.FC = () => {
                                     <textarea rows={5} placeholder="LISTA DE PRODUCTOS..." className="w-full p-4 bg-slate-50 rounded-2xl border-slate-100 font-bold uppercase text-sm" value={soporteData.productos} onChange={e => setSoporteData({...soporteData, productos: e.target.value})} />
                                 </div>
                             )}
-
                             {tipoCarga && (
                                 <button disabled={loading} onClick={guardarDatos} className="w-full mt-4 p-5 bg-slate-900 text-white rounded-[2rem] font-black uppercase italic tracking-widest shadow-xl hover:bg-blue-600 transition-all disabled:bg-slate-300">
                                     {loading ? 'Sincronizando...' : 'Confirmar Carga'}
