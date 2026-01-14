@@ -61,24 +61,27 @@ const ControlSoportes: React.FC = () => {
     return (
         <div className="max-w-7xl mx-auto px-4 pb-20 pt-10 font-sans bg-slate-50 min-h-screen">
             
-            {/* ENCABEZADO */}
-            <div className="mb-8 flex flex-col md:flex-row justify-between items-end gap-4">
+            {/* ENCABEZADO UNIFICADO */}
+            <header className="mb-12 flex flex-col md:flex-row justify-between items-end gap-6">
                 <div>
-                    <h1 className="text-3xl font-black text-slate-800 italic uppercase tracking-tighter">
-                        Control <span className="text-orange-500">Soportes</span>
+                    <h1 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">
+                        Control <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-red-600">Soportes</span>
                     </h1>
-                    <p className="text-slate-400 font-bold text-xs uppercase tracking-[0.3em] mt-2">
-                        Administración y Entregas
-                    </p>
+                    <p className="text-slate-500 font-medium text-sm">Administración y entregas técnicas.</p>
                 </div>
-                <input 
-                    type="text" 
-                    placeholder="🔍 BUSCAR..." 
-                    value={filtro}
-                    onChange={(e) => setFiltro(e.target.value)}
-                    className="p-3 bg-white border-2 border-slate-100 rounded-xl font-bold text-sm uppercase outline-none focus:border-orange-400 w-full md:w-64"
-                />
-            </div>
+
+                {/* Buscador Moderno Integrado */}
+                <div className="w-full md:w-auto relative group">
+                    <span className="absolute left-4 top-3.5 text-slate-400">🔍</span>
+                    <input 
+                        type="text" 
+                        placeholder="Buscar cliente o n°..." 
+                        value={filtro}
+                        onChange={(e) => setFiltro(e.target.value)}
+                        className="w-full md:w-80 pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md focus:shadow-lg focus:border-orange-400 outline-none transition-all font-bold text-sm text-slate-600 placeholder:text-slate-300"
+                    />
+                </div>
+            </header>
 
             {/* TABLA PENDIENTES */}
             <section className="bg-white rounded-[2rem] shadow-xl shadow-blue-900/5 border border-slate-100 overflow-hidden mb-12">

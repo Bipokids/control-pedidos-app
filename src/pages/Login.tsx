@@ -20,8 +20,8 @@ const Login: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-slate-900 p-4">
       <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-black text-slate-800 italic uppercase">Acceso</h1>
-          <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-2">Sistema de Gestión</p>
+          <h1 className="text-3xl font-black text-slate-800 italic uppercase">BIPOKIDS</h1>
+          <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-2">Sistema de Gestión lOGÍSTICO</p>
         </div>
 
         {error && <div className="bg-red-100 text-red-700 p-3 rounded-xl mb-4 text-center text-sm font-bold">{error}</div>}

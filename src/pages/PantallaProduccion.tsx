@@ -40,26 +40,38 @@ const PantallaProduccion: React.FC = () => {
     return (
         <div className="max-w-[1800px] mx-auto px-4 pb-20 pt-6 font-sans min-h-screen bg-slate-50">
             
-            {/* ENCABEZADO COMPACTO */}
-            <header className="mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
-                <div className="flex items-baseline gap-3">
-                    <h1 className="text-xl font-black text-slate-800 italic uppercase tracking-tighter">
-                        Producción <span className="text-yellow-600">Armado</span>
+            {/* ENCABEZADO UNIFICADO */}
+            <header className="mb-10 flex flex-col md:flex-row justify-between items-end gap-6">
+                <div>
+                    <h1 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">
+                        Producción <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 to-orange-600">Armado</span>
                     </h1>
-                    <span className="bg-slate-200 px-2 py-0.5 rounded text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                        {pedidos.length} Pendientes
-                    </span>
+                    <div className="flex items-center gap-3">
+                        <p className="text-slate-500 font-medium text-sm">Cola de trabajo en tiempo real.</p>
+                        <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border border-yellow-200 shadow-sm">
+                            {pedidos.length} Pendientes
+                        </span>
+                    </div>
                 </div>
-                <div className="flex gap-2 w-full md:w-auto">
+
+                {/* Buscador Moderno con Botón Limpiar Integrado */}
+                <div className="w-full md:w-auto relative group">
+                    <span className="absolute left-4 top-3.5 text-slate-400">🔍</span>
                     <input 
                         type="text" 
-                        placeholder="🔍 BUSCAR..." 
+                        placeholder="Buscar pedido..." 
                         value={filtro}
                         onChange={(e) => setFiltro(e.target.value)}
-                        className="p-2 bg-white border border-slate-200 rounded-lg font-bold text-xs uppercase outline-none focus:border-yellow-400 flex-1 md:w-64"
+                        className="w-full md:w-80 pl-11 pr-10 py-3 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md focus:shadow-lg focus:border-yellow-400 outline-none transition-all font-bold text-sm text-slate-600 placeholder:text-slate-300"
                     />
                     {filtro && (
-                        <button onClick={() => setFiltro("")} className="bg-red-500 text-white px-3 rounded-lg font-bold uppercase text-[10px]">X</button>
+                        <button 
+                            onClick={() => setFiltro("")} 
+                            className="absolute right-4 top-3.5 text-slate-300 hover:text-red-500 transition-colors font-bold"
+                            title="Limpiar búsqueda"
+                        >
+                            ✕
+                        </button>
                     )}
                 </div>
             </header>

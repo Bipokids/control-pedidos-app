@@ -125,24 +125,27 @@ const HistorialDespachos: React.FC = () => {
     return (
         <div className="max-w-5xl mx-auto px-4 py-8 font-sans min-h-screen bg-slate-50">
             
-            {/* ENCABEZADO */}
-            <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+            {/* ENCABEZADO UNIFICADO */}
+            <header className="mb-12 flex flex-col md:flex-row justify-between items-end gap-6">
                 <div>
-                    <h1 className="text-3xl font-black text-slate-800 italic uppercase tracking-tighter">
-                        Historial <span className="text-indigo-600">Despachos</span>
+                    <h1 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">
+                        Historial <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600">Despachos</span>
                     </h1>
-                    <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-1">
-                        Archivo de salidas y entregas
-                    </p>
+                    <p className="text-slate-500 font-medium text-sm">Archivo completo de salidas y entregas.</p>
                 </div>
-                <input 
-                    type="text" 
-                    placeholder="🔍 BUSCAR..." 
-                    value={filtro}
-                    onChange={(e) => setFiltro(e.target.value)}
-                    className="p-3 bg-white border-2 border-slate-100 rounded-xl font-bold text-sm uppercase outline-none focus:border-indigo-500 w-full md:w-72"
-                />
-            </div>
+
+                {/* Buscador Moderno Integrado */}
+                <div className="w-full md:w-auto relative group">
+                    <span className="absolute left-4 top-3.5 text-slate-400">🔍</span>
+                    <input 
+                        type="text" 
+                        placeholder="Buscar cliente, remito..." 
+                        value={filtro}
+                        onChange={(e) => setFiltro(e.target.value)}
+                        className="w-full md:w-80 pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md focus:shadow-lg focus:border-indigo-500 outline-none transition-all font-bold text-sm text-slate-600 placeholder:text-slate-300"
+                    />
+                </div>
+            </header>
 
             {/* LISTA DE FECHAS */}
             <div className="space-y-6">

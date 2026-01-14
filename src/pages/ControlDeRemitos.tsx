@@ -160,11 +160,20 @@ const ControlDeRemitos: React.FC = () => {
     return (
         <div className="max-w-7xl mx-auto px-4 pb-20 pt-10 font-sans bg-slate-50 min-h-screen relative">
             
-            {/* ENCABEZADO */}
-            <div className="mb-8 text-center md:text-left">
-                <h1 className="text-3xl font-black text-slate-800 italic uppercase leading-none tracking-tighter">Panel de Control</h1>
-                <p className="text-slate-500 font-bold text-xs uppercase tracking-widest mt-2">Logística y monitoreo centralizado</p>
-            </div>
+            {/* ENCABEZADO UNIFICADO */}
+            <header className="mb-12 flex justify-between items-end">
+                <div>
+                    <h1 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">
+                        Panel de <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600">Control</span>
+                    </h1>
+                    <p className="text-slate-500 font-medium text-sm">Logística y monitoreo centralizado.</p>
+                </div>
+
+                <div className="hidden md:block text-right">
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Fecha Actual</p>
+                    <p className="text-sm font-bold text-slate-700">{new Date().toLocaleDateString()}</p>
+                </div>
+            </header>
 
             {/* CONTADORES */}
             <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-6">

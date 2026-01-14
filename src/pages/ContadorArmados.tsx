@@ -124,23 +124,24 @@ const ContadorArmados: React.FC = () => {
     return (
         <div className="max-w-6xl mx-auto px-4 py-8 font-sans min-h-screen bg-slate-50">
             
-            {/* ENCABEZADO */}
-            <div className="flex justify-between items-center mb-8">
+            {/* ENCABEZADO UNIFICADO */}
+            <header className="mb-12 flex justify-between items-end">
                 <div>
-                    <h1 className="text-2xl font-black text-slate-800 italic uppercase tracking-tighter">
-                        Contador <span className="text-blue-600">Armados</span>
+                    <h1 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">
+                        Contador <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600">Armados</span>
                     </h1>
-                    <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">
-                        Monitor de producción en tiempo real
-                    </p>
+                    <p className="text-slate-500 font-medium text-sm">Monitor de producción en tiempo real.</p>
                 </div>
-                <button 
-                    onClick={() => setModalOpen(true)}
-                    className="px-4 py-2 bg-white border border-slate-200 rounded-lg shadow-sm hover:bg-slate-50 text-slate-600 font-bold text-xs flex items-center gap-2 transition-transform active:scale-95 uppercase"
-                >
-                    ⚙️ Configurar
-                </button>
-            </div>
+                
+                <div>
+                    <button 
+                        onClick={() => setModalOpen(true)}
+                        className="px-6 py-3 bg-white border border-slate-100 rounded-2xl shadow-lg shadow-indigo-500/10 hover:shadow-indigo-500/20 text-slate-600 font-bold text-xs flex items-center gap-2 transition-all active:scale-95 uppercase tracking-widest"
+                    >
+                        ⚙️ Configurar
+                    </button>
+                </div>
+            </header>
 
             {/* SECCIONES POR CATEGORÍA */}
             <div className="space-y-6 mb-10">

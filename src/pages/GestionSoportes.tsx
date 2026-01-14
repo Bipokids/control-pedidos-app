@@ -70,30 +70,44 @@ const GestionSoportes: React.FC = () => {
     return (
         <div className="max-w-[1600px] mx-auto p-6 font-sans min-h-screen bg-gray-50">
             
-            {/* ENCABEZADO (Sticky Header style) */}
-            <header className="sticky top-0 z-10 bg-white/90 backdrop-blur-md border-b border-gray-200 p-4 rounded-2xl shadow-sm mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
-                <div className="flex items-center gap-3">
-                    <span className="text-2xl">📋</span>
-                    <h1 className="text-xl font-bold text-gray-800">Gestión de Soportes Técnicos</h1>
+            {/* ENCABEZADO UNIFICADO */}
+            <header className="mb-10 flex flex-col xl:flex-row justify-between items-end gap-6">
+                <div>
+                    <h1 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">
+                        Gestión <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-red-600">Técnica</span>
+                    </h1>
+                    <p className="text-slate-500 font-medium text-sm">Seguimiento y resolución de soportes.</p>
                 </div>
 
-                <div className="flex flex-wrap gap-3 w-full md:w-auto">
-                    <input 
-                        className="flex-1 p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:border-blue-500 min-w-[220px]"
-                        placeholder="🔍 Buscar por cliente o número..."
-                        value={filtro}
-                        onChange={(e) => setFiltro(e.target.value)}
-                    />
-                    <select 
-                        className="p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:border-blue-500 bg-white cursor-pointer"
-                        value={filtroEstado}
-                        onChange={(e) => setFiltroEstado(e.target.value)}
-                    >
-                        <option value="">📂 Filtrar por estado...</option>
-                        <option value="Pendiente">Pendiente</option>
-                        <option value="En progreso">En progreso</option>
-                        <option value="Resuelto">Resuelto</option>
-                    </select>
+                <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto">
+                    {/* Buscador Moderno */}
+                    <div className="relative flex-1 min-w-[280px]">
+                        <span className="absolute left-4 top-3.5 text-slate-400">🔍</span>
+                        <input 
+                            type="text" 
+                            placeholder="Buscar cliente, n°..." 
+                            value={filtro}
+                            onChange={(e) => setFiltro(e.target.value)}
+                            className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md focus:shadow-lg focus:border-orange-400 outline-none transition-all font-bold text-sm text-slate-600 placeholder:text-slate-300"
+                        />
+                    </div>
+
+                    {/* Selector de Estado Estilizado */}
+                    <div className="relative min-w-[200px]">
+                        <span className="absolute left-4 top-3.5 text-slate-400">📂</span>
+                        <select 
+                            value={filtroEstado}
+                            onChange={(e) => setFiltroEstado(e.target.value)}
+                            className="w-full pl-11 pr-10 py-3 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md focus:shadow-lg focus:border-orange-400 outline-none transition-all font-bold text-sm text-slate-600 appearance-none cursor-pointer"
+                        >
+                            <option value="">Todos los Estados</option>
+                            <option value="Pendiente">Pendiente</option>
+                            <option value="En progreso">En progreso</option>
+                            <option value="Resuelto">Resuelto</option>
+                        </select>
+                        {/* Flecha personalizada para reemplazar la del navegador */}
+                        <span className="absolute right-4 top-4 text-slate-400 text-xs pointer-events-none">▼</span>
+                    </div>
                 </div>
             </header>
 

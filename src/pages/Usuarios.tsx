@@ -84,9 +84,20 @@ const Usuarios: React.FC = () => {
     return (
         <div className="max-w-4xl mx-auto px-4 py-8 font-sans min-h-screen bg-slate-50">
             
-            <h1 className="text-3xl font-black text-slate-800 italic uppercase tracking-tighter mb-8">
-                Gestión de <span className="text-pink-600">Usuarios</span>
-            </h1>
+            {/* ENCABEZADO UNIFICADO */}
+            <header className="mb-12 flex justify-between items-end">
+                <div>
+                    <h1 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">
+                        Gestión de <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-rose-600">Usuarios</span>
+                    </h1>
+                    <p className="text-slate-500 font-medium text-sm">Administración de roles y permisos de acceso.</p>
+                </div>
+
+                <div className="hidden md:block text-right">
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Fecha Actual</p>
+                    <p className="text-sm font-bold text-slate-700">{new Date().toLocaleDateString()}</p>
+                </div>
+            </header>
 
             {/* FORMULARIO DE CREACIÓN */}
             <div className="bg-white p-6 rounded-3xl shadow-lg border border-slate-100 mb-10">
