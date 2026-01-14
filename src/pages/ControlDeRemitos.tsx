@@ -7,12 +7,11 @@ const ControlDeRemitos: React.FC = () => {
     // ESTADOS DE DATOS
     const [remitos, setRemitos] = useState<Record<string, Remito>>({});
     const [soportes, setSoportes] = useState<Record<string, Soporte>>({});
+    const [despachos, setDespachos] = useState<any>({}); // <--- NUEVO ESTADO
     const [tablaManual, setTablaManual] = useState<any>({});
     
     // ESTADOS DE INTERFAZ
     const [filtro, setFiltro] = useState("");
-    
-    // --- NUEVO ESTADO: FILTRO RÁPIDO POR CONTADORES (Añadido 'listos') ---
     const [filtroRapido, setFiltroRapido] = useState<'sin_fecha' | 'produccion' | 'listos' | null>(null);
 
     const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -42,14 +41,40 @@ const ControlDeRemitos: React.FC = () => {
     const rangos = ["Lunes Mañana", "Lunes Tarde", "Martes Mañana", "Martes Tarde", "Miércoles Mañana", "Miércoles Tarde", "Jueves Mañana", "Jueves Tarde", "Viernes Mañana", "Viernes Tarde"];
     const weekdays = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES"];
 
+    // 1. CARGA DE DATOS (AHORA INCLUYE DESPACHOS)
     useEffect(() => {
         const unsubRemitos = onValue(ref(db_realtime, 'remitos'), (snapshot) => setRemitos(snapshot.val() || {}));
         const unsubSoportes = onValue(ref(db_realtime, 'soportes'), (snapshot) => setSoportes(snapshot.val() || {}));
+        const unsubDespachos = onValue(ref(db_realtime, 'despachos'), (snapshot) => setDespachos(snapshot.val() || {})); // <--- LEER DESPACHOS
         const unsubManual = onValue(ref(db_realtime, 'tablaManual'), (snapshot) => setTablaManual(snapshot.val() || {}));
-        return () => { unsubRemitos(); unsubSoportes(); unsubManual(); };
+
+        return () => { unsubRemitos(); unsubSoportes(); unsubDespachos(); unsubManual(); };
     }, []);
 
-    // --- CÁLCULO DE CONTADORES ---
+    // 2. LÓGICA DE MAPEO DE CHOFERES (OPTIMIZACIÓN)
+    // Creamos un mapa: { "numeroRemito_o_ID": "NombreChofer" } para acceso instantáneo
+    const mapaChoferes = React.useMemo(() => {
+        const map: Record<string, string> = {};
+        if (!despachos) return map;
+
+        // Iterar fechas (YYYY-MM-DD)
+        Object.values(despachos).forEach((itemsDia: any) => {
+            if (!itemsDia) return;
+            // Iterar items dentro del día
+            Object.values(itemsDia).forEach((d: any) => {
+                // Intentamos linkear por numeroRemito (si existe) o cliente como fallback
+                if (d.numeroRemito) map[d.numeroRemito] = d.chofer;
+                if (d.numeroSoporte) map[d.numeroSoporte] = d.chofer; // Para soportes
+                
+                // Opción robusta: Si guardas el ID original del remito en el despacho, usa ese ID.
+                // Si no, asumimos que coinciden por número.
+            });
+        });
+        return map;
+    }, [despachos]);
+
+
+    // 3. CÁLCULO DE CONTADORES
     const rPendientes = Object.values(remitos).filter(r => r.estadoPreparacion !== "Entregado").length;
     const rProduccion = Object.values(remitos).filter(r => r.produccion && r.estado === "Listo" && r.estadoPreparacion !== "Entregado").length;
     const rDespacho = Object.values(remitos).filter(r => r.estadoPreparacion === "Listo").length;
@@ -65,13 +90,12 @@ const ControlDeRemitos: React.FC = () => {
     const sResueltos = Object.values(soportes).filter(s => s.estado === "Resuelto").length;
     const sResueltosSinFecha = Object.values(soportes).filter(s => s.estado === "Resuelto" && (!s.rangoEntrega || s.rangoEntrega === "")).length;
 
-    // --- FILTRADO AVANZADO DE TABLA PRINCIPAL ---
+    // 4. FILTRADO TABLA PRINCIPAL
     const remitosFiltrados = Object.entries(remitos).filter(([_id, r]) => {
         if (r.estadoPreparacion === "Entregado") return false;
 
         const matchTexto = r.cliente?.toLowerCase().includes(filtro.toLowerCase()) || r.numeroRemito?.toString().includes(filtro);
         
-        // --- LÓGICA DE FILTROS RÁPIDOS ---
         if (filtroRapido === 'sin_fecha') {
             const sinRango = !r.rangoDespacho || r.rangoDespacho === "";
             if (!sinRango) return false;
@@ -79,27 +103,39 @@ const ControlDeRemitos: React.FC = () => {
             else return r.estadoPreparacion === "Pendiente" && matchTexto;
         }
 
-        if (filtroRapido === 'produccion') {
-            return r.produccion && r.estado === "Listo" && matchTexto;
-        }
-
-        if (filtroRapido === 'listos') { // NUEVO FILTRO
-            return r.estadoPreparacion === "Listo" && matchTexto;
-        }
+        if (filtroRapido === 'produccion') return r.produccion && r.estado === "Listo" && matchTexto;
+        if (filtroRapido === 'listos') return r.estadoPreparacion === "Listo" && matchTexto;
 
         return matchTexto;
     });
 
+    // 5. ENTREGADOS (MEZCLA Y ASIGNACIÓN DE CHOFER)
     const entregadosRemitos = Object.entries(remitos)
         .filter(([_id, r]) => r.estadoPreparacion === "Entregado")
-        .map(([id, r]) => ({ ...r, id, _type: 'remito', displayNumero: r.numeroRemito }));
+        .map(([id, r]) => ({ 
+            ...r, 
+            id, 
+            _type: 'remito', 
+            displayNumero: r.numeroRemito,
+            // Aquí buscamos el chofer en el mapa usando el número de remito
+            chofer: mapaChoferes[r.numeroRemito] || 'Sin asignar' 
+        }));
     
     const entregadosSoportes = Object.entries(soportes)
         .filter(([_id, s]) => s.estado === "Entregado")
-        .map(([id, s]) => ({ ...s, id, _type: 'soporte', displayNumero: s.numeroSoporte, clienteFirma: (s as any).clienteFirma }));
+        .map(([id, s]) => ({ 
+            ...s, 
+            id, 
+            _type: 'soporte', 
+            displayNumero: s.numeroSoporte, 
+            clienteFirma: (s as any).clienteFirma,
+            // Buscamos chofer para soporte
+            chofer: mapaChoferes[s.numeroSoporte] || 'Sin asignar'
+        }));
 
     const todosEntregados = [...entregadosRemitos, ...entregadosSoportes];
 
+    // ... (El resto de funciones eliminarItem, guardarDatos, etc. se mantienen igual) ...
     const eliminarItem = (id: string, type: string) => {
         if(window.confirm("¿Eliminar este registro entregado permanentemente?")) {
             const path = type === 'remito' ? 'remitos' : 'soportes';
@@ -108,68 +144,70 @@ const ControlDeRemitos: React.FC = () => {
     };
 
     const guardarDatos = async () => {
-        if (!tipoCarga) return;
-        setLoading(true);
-        try {
-            if (tipoCarga === 'remito') {
-                const numeroRemito = (datosRemitoRaw.match(/\b\d{4}-\d{8}\b/) || [""])[0];
-                const fechaEmision = (datosRemitoRaw.match(/\b\d{2}\/\d{2}\/\d{2,4}\b/) || [""])[0];
-                let cliente = "";
-                const lineasDatos = datosRemitoRaw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-                for (let i = 0; i < lineasDatos.length; i++) {
-                    if (/Raz[oó]n Social:/i.test(lineasDatos[i])) {
-                        cliente = lineasDatos[i].replace(/Raz[oó]n Social:/i, "").trim();
-                        if (!cliente && lineasDatos[i+1]) cliente = lineasDatos[i+1].trim();
-                        break;
-                    }
-                    if (!cliente && lineasDatos[i].length > 3 && !/^CUIT|Fecha|Tel|Domicilio/i.test(lineasDatos[i])) {
-                        cliente = lineasDatos[i];
-                    }
-                }
-                const articulos: any[] = [];
-                productosRaw.split(/\r?\n/).filter(Boolean).forEach(l => {
-                    const partes = l.trim().split(/\s+/);
-                    if (partes.length >= 2) {
-                        const cantidad = parseFloat(partes.shift()!.replace(",", "."));
-                        const codigo = partes.join(" ");
-                        if (codigo && !isNaN(cantidad)) articulos.push({ codigo, cantidad, detalle: "" });
-                    }
-                });
-                if (aclaracionesRaw) {
-                    const lineasAclara = aclaracionesRaw.split(/\r?\n|\/\//).map(l => l.trim()).filter(Boolean);
-                    lineasAclara.forEach(linea => {
-                        articulos.forEach(item => {
-                            const codNorm = item.codigo.replace(/\s+/g, "");
-                            if (linea.replace(/\s+/g, "").includes(codNorm)) {
-                                let detalleExtra = linea.replace(item.codigo, "").trim();
-                                if (detalleExtra) item.detalle = item.detalle ? item.detalle + " | " + detalleExtra : detalleExtra;
-                            }
-                        });
-                    });
-                }
-                await push(ref(db_realtime, 'remitos'), {
-                    numeroRemito, fechaEmision, cliente, articulos, aclaraciones: aclaracionesRaw,
-                    produccion: necesitaProduccion, esTransporte, estado: null, estadoPreparacion: "Pendiente",
-                    rangoDespacho: "", timestamp: new Date().toISOString()
-                });
-            } else {
-                await push(ref(db_realtime, 'soportes'), {
-                    numeroSoporte: soporteData.numero, cliente: soporteData.cliente,
-                    fechaSoporte: soporteData.fecha, productos: soporteData.productos.split('\n').filter(Boolean),
-                    estado: "Pendiente", timestamp: new Date().toISOString()
-                });
-            }
-            alert("✅ Guardado correctamente");
-            setSidebarOpen(false);
-            setDatosRemitoRaw(''); setProductosRaw(''); setAclaracionesRaw(''); setEsTransporte(false); setNecesitaProduccion(false);
-        } catch (e) { alert("❌ Error al guardar"); }
-        setLoading(false);
+       // ... (Lógica de guardado igual que antes) ...
+       if (!tipoCarga) return;
+       setLoading(true);
+       try {
+           if (tipoCarga === 'remito') {
+               // ... Procesamiento Remito ...
+               const numeroRemito = (datosRemitoRaw.match(/\b\d{4}-\d{8}\b/) || [""])[0];
+               const fechaEmision = (datosRemitoRaw.match(/\b\d{2}\/\d{2}\/\d{2,4}\b/) || [""])[0];
+               let cliente = "";
+               const lineasDatos = datosRemitoRaw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+               for (let i = 0; i < lineasDatos.length; i++) {
+                   if (/Raz[oó]n Social:/i.test(lineasDatos[i])) {
+                       cliente = lineasDatos[i].replace(/Raz[oó]n Social:/i, "").trim();
+                       if (!cliente && lineasDatos[i+1]) cliente = lineasDatos[i+1].trim();
+                       break;
+                   }
+                   if (!cliente && lineasDatos[i].length > 3 && !/^CUIT|Fecha|Tel|Domicilio/i.test(lineasDatos[i])) {
+                       cliente = lineasDatos[i];
+                   }
+               }
+               const articulos: any[] = [];
+               productosRaw.split(/\r?\n/).filter(Boolean).forEach(l => {
+                   const partes = l.trim().split(/\s+/);
+                   if (partes.length >= 2) {
+                       const cantidad = parseFloat(partes.shift()!.replace(",", "."));
+                       const codigo = partes.join(" ");
+                       if (codigo && !isNaN(cantidad)) articulos.push({ codigo, cantidad, detalle: "" });
+                   }
+               });
+               if (aclaracionesRaw) {
+                   const lineasAclara = aclaracionesRaw.split(/\r?\n|\/\//).map(l => l.trim()).filter(Boolean);
+                   lineasAclara.forEach(linea => {
+                       articulos.forEach(item => {
+                           const codNorm = item.codigo.replace(/\s+/g, "");
+                           if (linea.replace(/\s+/g, "").includes(codNorm)) {
+                               let detalleExtra = linea.replace(item.codigo, "").trim();
+                               if (detalleExtra) item.detalle = item.detalle ? item.detalle + " | " + detalleExtra : detalleExtra;
+                           }
+                       });
+                   });
+               }
+               await push(ref(db_realtime, 'remitos'), {
+                   numeroRemito, fechaEmision, cliente, articulos, aclaraciones: aclaracionesRaw,
+                   produccion: necesitaProduccion, esTransporte, estado: null, estadoPreparacion: "Pendiente",
+                   rangoDespacho: "", timestamp: new Date().toISOString()
+               });
+           } else {
+               await push(ref(db_realtime, 'soportes'), {
+                   numeroSoporte: soporteData.numero, cliente: soporteData.cliente,
+                   fechaSoporte: soporteData.fecha, productos: soporteData.productos.split('\n').filter(Boolean),
+                   estado: "Pendiente", timestamp: new Date().toISOString()
+               });
+           }
+           alert("✅ Guardado correctamente");
+           setSidebarOpen(false);
+           setDatosRemitoRaw(''); setProductosRaw(''); setAclaracionesRaw(''); setEsTransporte(false); setNecesitaProduccion(false);
+       } catch (e) { alert("❌ Error al guardar"); }
+       setLoading(false);
     };
 
     return (
         <div className="max-w-7xl mx-auto px-4 pb-20 pt-10 font-sans bg-slate-50 min-h-screen relative">
             
-            {/* ENCABEZADO UNIFICADO */}
+            {/* ENCABEZADO */}
             <header className="mb-12 flex justify-between items-end">
                 <div>
                     <h1 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">
@@ -183,36 +221,24 @@ const ControlDeRemitos: React.FC = () => {
                 </div>
             </header>
 
-            {/* CONTADORES (CON CLIC PARA FILTRAR) */}
+            {/* CONTADORES */}
             <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Logística (Remitos)</h3>
                     <div className="grid grid-cols-4 gap-2">
                         <StatCard label="Pendientes" val={rPendientes} color="border-orange-300" />
-                        
-                        {/* --- CLIC EN PRODUCCIÓN --- */}
                         <StatCard 
-                            label="Producción" 
-                            val={rProduccion} 
-                            color="border-yellow-400" 
+                            label="Producción" val={rProduccion} color="border-yellow-400" 
                             onClick={() => setFiltroRapido(filtroRapido === 'produccion' ? null : 'produccion')}
                             isActive={filtroRapido === 'produccion'}
                         />
-                        
-                        {/* --- CLIC EN LISTOS (NUEVO) --- */}
                         <StatCard 
-                            label="Listos" 
-                            val={rDespacho} 
-                            color="border-green-500" 
+                            label="Listos" val={rDespacho} color="border-green-500" 
                             onClick={() => setFiltroRapido(filtroRapido === 'listos' ? null : 'listos')}
                             isActive={filtroRapido === 'listos'}
                         />
-                        
-                        {/* --- CLIC EN SIN FECHA --- */}
                         <StatCard 
-                            label="Sin Fecha" 
-                            val={rListosSinFecha} 
-                            color="border-purple-500" 
+                            label="Sin Fecha" val={rListosSinFecha} color="border-purple-500" 
                             onClick={() => setFiltroRapido(filtroRapido === 'sin_fecha' ? null : 'sin_fecha')}
                             isActive={filtroRapido === 'sin_fecha'}
                         />
@@ -228,35 +254,25 @@ const ControlDeRemitos: React.FC = () => {
                 </div>
             </div>
 
-            {/* BUSCADOR CON INDICADOR DE FILTRO ACTIVO */}
+            {/* BUSCADOR */}
             <section className="mb-4 flex gap-4 items-center">
                 <div className="relative flex-1">
                     <input type="text" placeholder="🔍 BUSCAR POR CLIENTE, N° REMITO O ZONA..." value={filtro} onChange={(e) => setFiltro(e.target.value)} className="w-full p-5 bg-white border-2 border-slate-100 rounded-[2rem] shadow-sm focus:border-blue-500 outline-none font-bold text-sm uppercase italic" />
                 </div>
-                
-                {/* Botón para limpiar filtros */}
                 {filtroRapido && (
-                    <button 
-                        onClick={() => setFiltroRapido(null)}
-                        className="px-4 py-2 bg-red-50 text-red-600 rounded-xl font-bold text-xs uppercase hover:bg-red-100 transition-colors flex items-center gap-2 border border-red-100"
-                    >
-                        <span>✖</span>
-                        {filtroRapido === 'sin_fecha' ? 'Viendo Sin Fecha' : 
-                         filtroRapido === 'produccion' ? 'Viendo Producción' : 'Viendo Listos'}
+                    <button onClick={() => setFiltroRapido(null)} className="px-4 py-2 bg-red-50 text-red-600 rounded-xl font-bold text-xs uppercase hover:bg-red-100 transition-colors flex items-center gap-2 border border-red-100">
+                        <span>✖</span> {filtroRapido === 'sin_fecha' ? 'Viendo Sin Fecha' : filtroRapido === 'produccion' ? 'Viendo Producción' : 'Viendo Listos'}
                     </button>
                 )}
             </section>
 
-            {/* BOTÓN COLAPSAR / EXPANDIR TABLA */}
+            {/* BOTÓN COLAPSAR */}
             <div className="flex justify-between items-center mb-4 px-2">
                 <h3 className="text-xl font-black italic uppercase text-slate-400 flex items-center gap-2">
                     <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
                     Listado de Pedidos ({remitosFiltrados.length})
                 </h3>
-                <button 
-                    onClick={() => setTablaExpandida(!tablaExpandida)}
-                    className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl shadow-sm hover:bg-slate-50 transition-all font-bold text-xs uppercase text-slate-600"
-                >
+                <button onClick={() => setTablaExpandida(!tablaExpandida)} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl shadow-sm hover:bg-slate-50 transition-all font-bold text-xs uppercase text-slate-600">
                     {tablaExpandida ? 'Contraer' : 'Desplegar'}
                     <span className={`text-lg transition-transform duration-300 ${tablaExpandida ? 'rotate-180' : 'rotate-0'}`}>▼</span>
                 </button>
@@ -280,12 +296,11 @@ const ControlDeRemitos: React.FC = () => {
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {remitosFiltrados.map(([id, r], index) => {
-                                    let bgClass = index % 2 === 0 ? 'bg-white' : 'bg-gray-50'; // Default
+                                    let bgClass = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
                                     const sinRango = !r.rangoDespacho || r.rangoDespacho === "";
 
-                                    if (r.estadoPreparacion === 'Despachado') {
-                                        bgClass = 'bg-cyan-100 text-cyan-900';
-                                    } else {
+                                    if (r.estadoPreparacion === 'Despachado') bgClass = 'bg-cyan-100 text-cyan-900';
+                                    else {
                                         if (r.produccion) {
                                             if (r.estado === 'Listo') {
                                                 if (sinRango) bgClass = 'bg-purple-100 text-purple-900';
@@ -303,18 +318,10 @@ const ControlDeRemitos: React.FC = () => {
                                         <tr key={id} className={`hover:bg-slate-200 transition-colors text-[11px] font-bold ${bgClass} ${borderClass}`}>
                                             <td className="p-5 font-mono cursor-pointer hover:text-blue-600 hover:underline" onClick={() => setModalDetalle({ open: true, data: r })} title="Ver detalle">#{r.numeroRemito}</td>
                                             <td className="p-5 uppercase">{r.cliente}</td>
-                                            <td className="p-5 text-center">
-                                                <input type="checkbox" checked={r.produccion} onChange={(e) => update(ref(db_realtime, `remitos/${id}`), { produccion: e.target.checked })} className="w-4 h-4 rounded border-slate-300 text-blue-600" />
-                                            </td>
-                                            <td className="p-5 text-center">
-                                                {r.produccion && <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase shadow-sm ${r.estado === 'Listo' ? 'bg-green-500 text-white' : 'bg-yellow-200 text-yellow-800'}`}>{r.estado || 'PENDIENTE'}</span>}
-                                            </td>
-                                            <td className="p-5 text-center">
-                                                <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase shadow-sm bg-white/50 border border-slate-200`}>{r.estadoPreparacion || 'PENDIENTE'}</span>
-                                            </td>
-                                            <td className="p-5 text-center">
-                                                <button onClick={() => update(ref(db_realtime, `remitos/${id}`), { prioridad: !r.prioridad })} className={`text-lg transition-transform active:scale-90 ${r.prioridad ? 'grayscale-0' : 'grayscale opacity-20'}`}>🔥</button>
-                                            </td>
+                                            <td className="p-5 text-center"><input type="checkbox" checked={r.produccion} onChange={(e) => update(ref(db_realtime, `remitos/${id}`), { produccion: e.target.checked })} className="w-4 h-4 rounded border-slate-300 text-blue-600" /></td>
+                                            <td className="p-5 text-center">{r.produccion && <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase shadow-sm ${r.estado === 'Listo' ? 'bg-green-500 text-white' : 'bg-yellow-200 text-yellow-800'}`}>{r.estado || 'PENDIENTE'}</span>}</td>
+                                            <td className="p-5 text-center"><span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase shadow-sm bg-white/50 border border-slate-200`}>{r.estadoPreparacion || 'PENDIENTE'}</span></td>
+                                            <td className="p-5 text-center"><button onClick={() => update(ref(db_realtime, `remitos/${id}`), { prioridad: !r.prioridad })} className={`text-lg transition-transform active:scale-90 ${r.prioridad ? 'grayscale-0' : 'grayscale opacity-20'}`}>🔥</button></td>
                                             <td className="p-5 text-center">
                                                 <select value={r.rangoDespacho || ""} onChange={(e) => update(ref(db_realtime, `remitos/${id}`), { rangoDespacho: e.target.value })} className="bg-white/50 border border-slate-300 rounded-xl p-2 text-[10px] font-black uppercase outline-none focus:bg-white">
                                                     <option value="">-- SELECCIONAR --</option>
@@ -340,44 +347,23 @@ const ControlDeRemitos: React.FC = () => {
                             const diaFix = dia === "MIERCOLES" ? "Miércoles" : dia.charAt(0) + dia.slice(1).toLowerCase();
                             const match = `${diaFix} ${bloque}`;
                             return (
-                                <div 
-                                    key={bloque} 
-                                    className="p-5 border-b border-gray-50 min-h-[130px] last:border-0 hover:bg-gray-50 transition-colors" 
-                                    onDoubleClick={() => {
-                                        const val = prompt(`Nota para ${match}:`);
-                                        if(val) set(ref(db_realtime, `tablaManual/${diaFix}_${bloque}/${Date.now()}`), { text: val });
-                                    }}
-                                >
+                                <div key={bloque} className="p-5 border-b border-gray-50 min-h-[130px] last:border-0 hover:bg-gray-50 transition-colors" onDoubleClick={() => { const val = prompt(`Nota para ${match}:`); if(val) set(ref(db_realtime, `tablaManual/${diaFix}_${bloque}/${Date.now()}`), { text: val }); }}>
                                     <p className="text-[10px] font-black text-blue-500 uppercase mb-3 tracking-widest text-center">{bloque}</p>
                                     <div className="flex flex-col gap-2">
-                                        {/* REMITOS CON LÓGICA DE COLOR SEMANAL */}
                                         {Object.entries(remitos).filter(([,r]) => r.rangoDespacho === match && r.estadoPreparacion !== "Entregado").map(([id,r]) => {
-                                            
-                                            // Lógica de color de fondo del chip semanal
-                                            let bgChip = 'bg-orange-100 text-orange-700 border-orange-400'; // Pendiente (Default)
+                                            let bgChip = 'bg-orange-100 text-orange-700 border-orange-400';
                                             if (r.estadoPreparacion === 'Listo') bgChip = 'bg-green-100 text-green-700 border-green-500';
                                             if (r.estadoPreparacion === 'Despachado') bgChip = 'bg-cyan-100 text-cyan-700 border-cyan-500';
-
-                                            // Si es prioritario, forzamos rojo
                                             if (r.prioridad) bgChip = 'bg-red-50 text-red-700 border-red-500';
-
                                             return (
-                                                <span 
-                                                    key={id} 
-                                                    onClick={() => setModalDetalle({ open: true, data: r })}
-                                                    className={`px-3 py-2 rounded-xl text-[9px] font-black border-l-4 shadow-sm cursor-pointer hover:scale-105 transition-transform ${bgChip}`}
-                                                >
+                                                <span key={id} onClick={() => setModalDetalle({ open: true, data: r })} className={`px-3 py-2 rounded-xl text-[9px] font-black border-l-4 shadow-sm cursor-pointer hover:scale-105 transition-transform ${bgChip}`}>
                                                     {r.cliente}
                                                 </span>
                                             );
                                         })}
-                                        
-                                        {/* SOPORTES */}
                                         {Object.entries(soportes).filter(([,s]) => s.rangoEntrega === match && s.estado !== "Entregado").map(([id,s]) => (
                                             <span key={id} onClick={() => setModalDetalle({ open: true, data: s })} className="px-3 py-2 rounded-xl text-[9px] font-black border-l-4 bg-orange-50 text-orange-700 border-orange-500 shadow-sm flex items-center gap-2 cursor-pointer hover:scale-105 transition-transform"><span>🛠️</span> {s.cliente}</span>
                                         ))}
-                                        
-                                        {/* NOTAS MANUALES */}
                                         {tablaManual[`${diaFix}_${bloque}`] && Object.entries(tablaManual[`${diaFix}_${bloque}`]).map(([mId,m]:any) => (
                                             <span key={mId} className="px-3 py-2 rounded-xl text-[9px] font-black bg-amber-50 text-amber-700 border-l-4 border-amber-400 italic flex justify-between group">
                                                 {m.text}
@@ -423,8 +409,11 @@ const ControlDeRemitos: React.FC = () => {
                 </div>
             </section>
 
+            {/* BOTÓN FLOTANTE */}
             <button onClick={() => setSidebarOpen(true)} className="fixed bottom-10 right-10 w-16 h-16 bg-blue-600 text-white rounded-full shadow-2xl flex items-center justify-center text-3xl font-bold z-50 hover:scale-110 active:scale-95 transition-all">+</button>
 
+            {/* MODALS (Detalle y Firma) */}
+            {/* ... (Se mantienen igual que en la versión anterior, solo asegúrate de incluirlos) ... */}
             {modalDetalle.open && modalDetalle.data && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" onClick={() => setModalDetalle({ open: false, data: null })}>
                     <div className="bg-white rounded-[2rem] p-8 w-full max-w-lg shadow-2xl animate-in fade-in zoom-in duration-300" onClick={e => e.stopPropagation()}>
@@ -502,6 +491,7 @@ const ControlDeRemitos: React.FC = () => {
                 </div>
             )}
 
+            {/* SIDEBAR DE CARGA */}
             {sidebarOpen && (
                 <div className="fixed inset-0 z-[100] flex justify-end">
                     <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
@@ -549,7 +539,7 @@ const ControlDeRemitos: React.FC = () => {
     );
 };
 
-// Componente StatCard actualizado
+// Componente StatCard
 function StatCard({ label, val, color, onClick, isActive }: { label: string, val: number, color: string, onClick?: () => void, isActive?: boolean }) {
     return (
         <div 
