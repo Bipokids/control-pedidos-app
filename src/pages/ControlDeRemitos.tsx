@@ -12,8 +12,8 @@ const ControlDeRemitos: React.FC = () => {
     // ESTADOS DE INTERFAZ
     const [filtro, setFiltro] = useState("");
     
-    // --- NUEVO ESTADO: FILTRO RÁPIDO POR CONTADORES ---
-    const [filtroRapido, setFiltroRapido] = useState<'sin_fecha' | 'produccion' | null>(null);
+    // --- NUEVO ESTADO: FILTRO RÁPIDO POR CONTADORES (Añadido 'listos') ---
+    const [filtroRapido, setFiltroRapido] = useState<'sin_fecha' | 'produccion' | 'listos' | null>(null);
 
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [modalFirma, setModalFirma] = useState<{ open: boolean, data: any, type: 'remito' | 'soporte' }>({ open: false, data: null, type: 'remito' });
@@ -67,27 +67,24 @@ const ControlDeRemitos: React.FC = () => {
 
     // --- FILTRADO AVANZADO DE TABLA PRINCIPAL ---
     const remitosFiltrados = Object.entries(remitos).filter(([_id, r]) => {
-        // 1. Filtro base: No mostrar entregados
         if (r.estadoPreparacion === "Entregado") return false;
 
-        // 2. Filtro de búsqueda textual (input)
         const matchTexto = r.cliente?.toLowerCase().includes(filtro.toLowerCase()) || r.numeroRemito?.toString().includes(filtro);
         
-        // 3. Filtros Rápidos (Clic en contadores)
+        // --- LÓGICA DE FILTROS RÁPIDOS ---
         if (filtroRapido === 'sin_fecha') {
             const sinRango = !r.rangoDespacho || r.rangoDespacho === "";
-            if (!sinRango) return false; // Si tiene fecha, chau
-            
-            // Misma lógica que el contador violeta
+            if (!sinRango) return false;
             if (r.produccion) return r.estado === "Listo" && matchTexto;
             else return r.estadoPreparacion === "Pendiente" && matchTexto;
         }
 
         if (filtroRapido === 'produccion') {
-            // Solo mostrar los que requieren producción Y ya están listos de producción (Amarillos)
-            // Ojo: Si quieres ver TODOS los de producción (incluso no listos), quita la condición r.estado === 'Listo'
-            // Aquí asumo que quieres ver los que suman al contador amarillo (Listos para logística)
             return r.produccion && r.estado === "Listo" && matchTexto;
+        }
+
+        if (filtroRapido === 'listos') { // NUEVO FILTRO
+            return r.estadoPreparacion === "Listo" && matchTexto;
         }
 
         return matchTexto;
@@ -202,7 +199,14 @@ const ControlDeRemitos: React.FC = () => {
                             isActive={filtroRapido === 'produccion'}
                         />
                         
-                        <StatCard label="Listos" val={rDespacho} color="border-green-500" />
+                        {/* --- CLIC EN LISTOS (NUEVO) --- */}
+                        <StatCard 
+                            label="Listos" 
+                            val={rDespacho} 
+                            color="border-green-500" 
+                            onClick={() => setFiltroRapido(filtroRapido === 'listos' ? null : 'listos')}
+                            isActive={filtroRapido === 'listos'}
+                        />
                         
                         {/* --- CLIC EN SIN FECHA --- */}
                         <StatCard 
@@ -230,14 +234,15 @@ const ControlDeRemitos: React.FC = () => {
                     <input type="text" placeholder="🔍 BUSCAR POR CLIENTE, N° REMITO O ZONA..." value={filtro} onChange={(e) => setFiltro(e.target.value)} className="w-full p-5 bg-white border-2 border-slate-100 rounded-[2rem] shadow-sm focus:border-blue-500 outline-none font-bold text-sm uppercase italic" />
                 </div>
                 
-                {/* Botón para limpiar filtros si hay alguno activo */}
+                {/* Botón para limpiar filtros */}
                 {filtroRapido && (
                     <button 
                         onClick={() => setFiltroRapido(null)}
                         className="px-4 py-2 bg-red-50 text-red-600 rounded-xl font-bold text-xs uppercase hover:bg-red-100 transition-colors flex items-center gap-2 border border-red-100"
                     >
                         <span>✖</span>
-                        {filtroRapido === 'sin_fecha' ? 'Viendo Sin Fecha' : 'Viendo Producción'}
+                        {filtroRapido === 'sin_fecha' ? 'Viendo Sin Fecha' : 
+                         filtroRapido === 'produccion' ? 'Viendo Producción' : 'Viendo Listos'}
                     </button>
                 )}
             </section>
@@ -345,12 +350,34 @@ const ControlDeRemitos: React.FC = () => {
                                 >
                                     <p className="text-[10px] font-black text-blue-500 uppercase mb-3 tracking-widest text-center">{bloque}</p>
                                     <div className="flex flex-col gap-2">
-                                        {Object.entries(remitos).filter(([,r]) => r.rangoDespacho === match && r.estadoPreparacion !== "Entregado").map(([id,r]) => (
-                                            <span key={id} onClick={() => setModalDetalle({ open: true, data: r })} className={`px-3 py-2 rounded-xl text-[9px] font-black border-l-4 shadow-sm cursor-pointer hover:scale-105 transition-transform ${r.prioridad ? 'bg-red-50 text-red-700 border-red-500' : 'bg-blue-50 text-blue-700 border-blue-400'}`}>{r.cliente}</span>
-                                        ))}
+                                        {/* REMITOS CON LÓGICA DE COLOR SEMANAL */}
+                                        {Object.entries(remitos).filter(([,r]) => r.rangoDespacho === match && r.estadoPreparacion !== "Entregado").map(([id,r]) => {
+                                            
+                                            // Lógica de color de fondo del chip semanal
+                                            let bgChip = 'bg-orange-100 text-orange-700 border-orange-400'; // Pendiente (Default)
+                                            if (r.estadoPreparacion === 'Listo') bgChip = 'bg-green-100 text-green-700 border-green-500';
+                                            if (r.estadoPreparacion === 'Despachado') bgChip = 'bg-cyan-100 text-cyan-700 border-cyan-500';
+
+                                            // Si es prioritario, forzamos rojo
+                                            if (r.prioridad) bgChip = 'bg-red-50 text-red-700 border-red-500';
+
+                                            return (
+                                                <span 
+                                                    key={id} 
+                                                    onClick={() => setModalDetalle({ open: true, data: r })}
+                                                    className={`px-3 py-2 rounded-xl text-[9px] font-black border-l-4 shadow-sm cursor-pointer hover:scale-105 transition-transform ${bgChip}`}
+                                                >
+                                                    {r.cliente}
+                                                </span>
+                                            );
+                                        })}
+                                        
+                                        {/* SOPORTES */}
                                         {Object.entries(soportes).filter(([,s]) => s.rangoEntrega === match && s.estado !== "Entregado").map(([id,s]) => (
                                             <span key={id} onClick={() => setModalDetalle({ open: true, data: s })} className="px-3 py-2 rounded-xl text-[9px] font-black border-l-4 bg-orange-50 text-orange-700 border-orange-500 shadow-sm flex items-center gap-2 cursor-pointer hover:scale-105 transition-transform"><span>🛠️</span> {s.cliente}</span>
                                         ))}
+                                        
+                                        {/* NOTAS MANUALES */}
                                         {tablaManual[`${diaFix}_${bloque}`] && Object.entries(tablaManual[`${diaFix}_${bloque}`]).map(([mId,m]:any) => (
                                             <span key={mId} className="px-3 py-2 rounded-xl text-[9px] font-black bg-amber-50 text-amber-700 border-l-4 border-amber-400 italic flex justify-between group">
                                                 {m.text}
@@ -522,7 +549,7 @@ const ControlDeRemitos: React.FC = () => {
     );
 };
 
-// Componente StatCard actualizado con soporte para Clic
+// Componente StatCard actualizado
 function StatCard({ label, val, color, onClick, isActive }: { label: string, val: number, color: string, onClick?: () => void, isActive?: boolean }) {
     return (
         <div 
