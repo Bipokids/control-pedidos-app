@@ -11,13 +11,13 @@ const ControlDeRemitos: React.FC = () => {
     
     // ESTADOS DE INTERFAZ
     const [filtro, setFiltro] = useState("");
+    
+    // --- NUEVO ESTADO: FILTRO RÁPIDO POR CONTADORES ---
+    const [filtroRapido, setFiltroRapido] = useState<'sin_fecha' | 'produccion' | null>(null);
+
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [modalFirma, setModalFirma] = useState<{ open: boolean, data: any, type: 'remito' | 'soporte' }>({ open: false, data: null, type: 'remito' });
-    
-    // MODAL DE DETALLE (Ahora acepta 'any' para manejar Remito o Soporte)
     const [modalDetalle, setModalDetalle] = useState<{ open: boolean, data: any | null }>({ open: false, data: null });
-
-    // CONTROLAR SI LA TABLA SE VE O NO
     const [tablaExpandida, setTablaExpandida] = useState(true);
 
     // ESTADOS SIDEBAR (FORMULARIOS)
@@ -42,44 +42,57 @@ const ControlDeRemitos: React.FC = () => {
     const rangos = ["Lunes Mañana", "Lunes Tarde", "Martes Mañana", "Martes Tarde", "Miércoles Mañana", "Miércoles Tarde", "Jueves Mañana", "Jueves Tarde", "Viernes Mañana", "Viernes Tarde"];
     const weekdays = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES"];
 
-    // 1. CARGA DE DATOS
     useEffect(() => {
         const unsubRemitos = onValue(ref(db_realtime, 'remitos'), (snapshot) => setRemitos(snapshot.val() || {}));
         const unsubSoportes = onValue(ref(db_realtime, 'soportes'), (snapshot) => setSoportes(snapshot.val() || {}));
         const unsubManual = onValue(ref(db_realtime, 'tablaManual'), (snapshot) => setTablaManual(snapshot.val() || {}));
-
         return () => { unsubRemitos(); unsubSoportes(); unsubManual(); };
     }, []);
 
-    // 2. CÁLCULO DE CONTADORES
+    // --- CÁLCULO DE CONTADORES ---
     const rPendientes = Object.values(remitos).filter(r => r.estadoPreparacion !== "Entregado").length;
     const rProduccion = Object.values(remitos).filter(r => r.produccion && r.estado === "Listo" && r.estadoPreparacion !== "Entregado").length;
     const rDespacho = Object.values(remitos).filter(r => r.estadoPreparacion === "Listo").length;
     
-    // LÓGICA SIN FECHA (VIOLETA)
     const rListosSinFecha = Object.values(remitos).filter(r => {
         if (r.estadoPreparacion === "Entregado") return false;
         if (r.rangoDespacho && r.rangoDespacho !== "") return false;
-        if (r.produccion) {
-            // A. PRODUCCIÓN: Cuenta si Producción ya terminó (Listo) y falta asignar fecha
-            return r.estado === "Listo";
-        } else {
-            // B. STOCK: Cuenta si está PENDIENTE (necesita fecha para que sepan cuándo armarlo)
-            return r.estadoPreparacion === "Pendiente";
-        }
+        if (r.produccion) return r.estado === "Listo";
+        else return r.estadoPreparacion === "Pendiente";
     }).length;
 
     const sPendientes = Object.values(soportes).filter(s => s.estado === "Pendiente").length;
     const sResueltos = Object.values(soportes).filter(s => s.estado === "Resuelto").length;
     const sResueltosSinFecha = Object.values(soportes).filter(s => s.estado === "Resuelto" && (!s.rangoEntrega || s.rangoEntrega === "")).length;
 
-    // 3. FILTRADO TABLA PRINCIPAL
+    // --- FILTRADO AVANZADO DE TABLA PRINCIPAL ---
     const remitosFiltrados = Object.entries(remitos).filter(([_id, r]) => {
-        const match = r.cliente?.toLowerCase().includes(filtro.toLowerCase()) || r.numeroRemito?.toString().includes(filtro);
-        return match && r.estadoPreparacion !== "Entregado";
+        // 1. Filtro base: No mostrar entregados
+        if (r.estadoPreparacion === "Entregado") return false;
+
+        // 2. Filtro de búsqueda textual (input)
+        const matchTexto = r.cliente?.toLowerCase().includes(filtro.toLowerCase()) || r.numeroRemito?.toString().includes(filtro);
+        
+        // 3. Filtros Rápidos (Clic en contadores)
+        if (filtroRapido === 'sin_fecha') {
+            const sinRango = !r.rangoDespacho || r.rangoDespacho === "";
+            if (!sinRango) return false; // Si tiene fecha, chau
+            
+            // Misma lógica que el contador violeta
+            if (r.produccion) return r.estado === "Listo" && matchTexto;
+            else return r.estadoPreparacion === "Pendiente" && matchTexto;
+        }
+
+        if (filtroRapido === 'produccion') {
+            // Solo mostrar los que requieren producción Y ya están listos de producción (Amarillos)
+            // Ojo: Si quieres ver TODOS los de producción (incluso no listos), quita la condición r.estado === 'Listo'
+            // Aquí asumo que quieres ver los que suman al contador amarillo (Listos para logística)
+            return r.produccion && r.estado === "Listo" && matchTexto;
+        }
+
+        return matchTexto;
     });
 
-    // 4. ENTREGADOS
     const entregadosRemitos = Object.entries(remitos)
         .filter(([_id, r]) => r.estadoPreparacion === "Entregado")
         .map(([id, r]) => ({ ...r, id, _type: 'remito', displayNumero: r.numeroRemito }));
@@ -90,7 +103,6 @@ const ControlDeRemitos: React.FC = () => {
 
     const todosEntregados = [...entregadosRemitos, ...entregadosSoportes];
 
-    // 5. FUNCIONES DE GESTIÓN
     const eliminarItem = (id: string, type: string) => {
         if(window.confirm("¿Eliminar este registro entregado permanentemente?")) {
             const path = type === 'remito' ? 'remitos' : 'soportes';
@@ -168,22 +180,38 @@ const ControlDeRemitos: React.FC = () => {
                     </h1>
                     <p className="text-slate-500 font-medium text-sm">Logística y monitoreo centralizado.</p>
                 </div>
-
                 <div className="hidden md:block text-right">
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Fecha Actual</p>
                     <p className="text-sm font-bold text-slate-700">{new Date().toLocaleDateString()}</p>
                 </div>
             </header>
 
-            {/* CONTADORES */}
+            {/* CONTADORES (CON CLIC PARA FILTRAR) */}
             <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Logística (Remitos)</h3>
                     <div className="grid grid-cols-4 gap-2">
                         <StatCard label="Pendientes" val={rPendientes} color="border-orange-300" />
-                        <StatCard label="Producción" val={rProduccion} color="border-yellow-400" />
+                        
+                        {/* --- CLIC EN PRODUCCIÓN --- */}
+                        <StatCard 
+                            label="Producción" 
+                            val={rProduccion} 
+                            color="border-yellow-400" 
+                            onClick={() => setFiltroRapido(filtroRapido === 'produccion' ? null : 'produccion')}
+                            isActive={filtroRapido === 'produccion'}
+                        />
+                        
                         <StatCard label="Listos" val={rDespacho} color="border-green-500" />
-                        <StatCard label="Sin Fecha" val={rListosSinFecha} color="border-purple-500" />
+                        
+                        {/* --- CLIC EN SIN FECHA --- */}
+                        <StatCard 
+                            label="Sin Fecha" 
+                            val={rListosSinFecha} 
+                            color="border-purple-500" 
+                            onClick={() => setFiltroRapido(filtroRapido === 'sin_fecha' ? null : 'sin_fecha')}
+                            isActive={filtroRapido === 'sin_fecha'}
+                        />
                     </div>
                 </div>
                 <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
@@ -196,9 +224,22 @@ const ControlDeRemitos: React.FC = () => {
                 </div>
             </div>
 
-            {/* BUSCADOR */}
-            <section className="mb-4">
-                <input type="text" placeholder="🔍 BUSCAR POR CLIENTE, N° REMITO O ZONA..." value={filtro} onChange={(e) => setFiltro(e.target.value)} className="w-full p-5 bg-white border-2 border-slate-100 rounded-[2rem] shadow-sm focus:border-blue-500 outline-none font-bold text-sm uppercase italic" />
+            {/* BUSCADOR CON INDICADOR DE FILTRO ACTIVO */}
+            <section className="mb-4 flex gap-4 items-center">
+                <div className="relative flex-1">
+                    <input type="text" placeholder="🔍 BUSCAR POR CLIENTE, N° REMITO O ZONA..." value={filtro} onChange={(e) => setFiltro(e.target.value)} className="w-full p-5 bg-white border-2 border-slate-100 rounded-[2rem] shadow-sm focus:border-blue-500 outline-none font-bold text-sm uppercase italic" />
+                </div>
+                
+                {/* Botón para limpiar filtros si hay alguno activo */}
+                {filtroRapido && (
+                    <button 
+                        onClick={() => setFiltroRapido(null)}
+                        className="px-4 py-2 bg-red-50 text-red-600 rounded-xl font-bold text-xs uppercase hover:bg-red-100 transition-colors flex items-center gap-2 border border-red-100"
+                    >
+                        <span>✖</span>
+                        {filtroRapido === 'sin_fecha' ? 'Viendo Sin Fecha' : 'Viendo Producción'}
+                    </button>
+                )}
             </section>
 
             {/* BOTÓN COLAPSAR / EXPANDIR TABLA */}
@@ -216,7 +257,7 @@ const ControlDeRemitos: React.FC = () => {
                 </button>
             </div>
 
-            {/* TABLA PRINCIPAL (DESPLEGABLE) */}
+            {/* TABLA PRINCIPAL */}
             {tablaExpandida && (
                 <section className="bg-white rounded-[2.5rem] shadow-xl shadow-blue-900/5 border border-slate-100 overflow-hidden mb-12 animate-in slide-in-from-top-4 fade-in duration-300">
                     <div className="overflow-x-auto">
@@ -237,40 +278,25 @@ const ControlDeRemitos: React.FC = () => {
                                     let bgClass = index % 2 === 0 ? 'bg-white' : 'bg-gray-50'; // Default
                                     const sinRango = !r.rangoDespacho || r.rangoDespacho === "";
 
-                                    // Lógica de colores
                                     if (r.estadoPreparacion === 'Despachado') {
                                         bgClass = 'bg-cyan-100 text-cyan-900';
-                                    } 
-                                    else {
+                                    } else {
                                         if (r.produccion) {
                                             if (r.estado === 'Listo') {
                                                 if (sinRango) bgClass = 'bg-purple-100 text-purple-900';
                                                 else if (r.estadoPreparacion === 'Listo') bgClass = 'bg-green-100 text-green-900';
                                                 else bgClass = 'bg-yellow-100 text-yellow-900';
                                             }
-                                        }
-                                        else {
-                                            if (r.estadoPreparacion === 'Pendiente' && sinRango) {
-                                                bgClass = 'bg-purple-100 text-purple-900';
-                                            }
-                                            else if (r.estadoPreparacion === 'Listo') {
-                                                bgClass = 'bg-green-100 text-green-900';
-                                            }
+                                        } else {
+                                            if (r.estadoPreparacion === 'Pendiente' && sinRango) bgClass = 'bg-purple-100 text-purple-900';
+                                            else if (r.estadoPreparacion === 'Listo') bgClass = 'bg-green-100 text-green-900';
                                         }
                                     }
-
                                     const borderClass = r.prioridad ? 'border-l-4 border-red-500' : '';
 
                                     return (
                                         <tr key={id} className={`hover:bg-slate-200 transition-colors text-[11px] font-bold ${bgClass} ${borderClass}`}>
-                                            <td 
-                                                className="p-5 font-mono cursor-pointer hover:text-blue-600 hover:underline"
-                                                onClick={() => setModalDetalle({ open: true, data: r })}
-                                                title="Ver detalle del pedido"
-                                            >
-                                                #{r.numeroRemito}
-                                            </td>
-                                            
+                                            <td className="p-5 font-mono cursor-pointer hover:text-blue-600 hover:underline" onClick={() => setModalDetalle({ open: true, data: r })} title="Ver detalle">#{r.numeroRemito}</td>
                                             <td className="p-5 uppercase">{r.cliente}</td>
                                             <td className="p-5 text-center">
                                                 <input type="checkbox" checked={r.produccion} onChange={(e) => update(ref(db_realtime, `remitos/${id}`), { produccion: e.target.checked })} className="w-4 h-4 rounded border-slate-300 text-blue-600" />
@@ -319,30 +345,12 @@ const ControlDeRemitos: React.FC = () => {
                                 >
                                     <p className="text-[10px] font-black text-blue-500 uppercase mb-3 tracking-widest text-center">{bloque}</p>
                                     <div className="flex flex-col gap-2">
-                                        {/* REMITOS */}
                                         {Object.entries(remitos).filter(([,r]) => r.rangoDespacho === match && r.estadoPreparacion !== "Entregado").map(([id,r]) => (
-                                            <span 
-                                                key={id} 
-                                                onClick={() => setModalDetalle({ open: true, data: r })}
-                                                className={`px-3 py-2 rounded-xl text-[9px] font-black border-l-4 shadow-sm cursor-pointer hover:scale-105 transition-transform ${r.prioridad ? 'bg-red-50 text-red-700 border-red-500' : 'bg-blue-50 text-blue-700 border-blue-400'}`}
-                                            >
-                                                {r.cliente}
-                                            </span>
+                                            <span key={id} onClick={() => setModalDetalle({ open: true, data: r })} className={`px-3 py-2 rounded-xl text-[9px] font-black border-l-4 shadow-sm cursor-pointer hover:scale-105 transition-transform ${r.prioridad ? 'bg-red-50 text-red-700 border-red-500' : 'bg-blue-50 text-blue-700 border-blue-400'}`}>{r.cliente}</span>
                                         ))}
-                                        
-                                        {/* SOPORTES */}
                                         {Object.entries(soportes).filter(([,s]) => s.rangoEntrega === match && s.estado !== "Entregado").map(([id,s]) => (
-                                            /* --- CLICK EN SOPORTE --- */
-                                            <span 
-                                                key={id} 
-                                                onClick={() => setModalDetalle({ open: true, data: s })}
-                                                className="px-3 py-2 rounded-xl text-[9px] font-black border-l-4 bg-orange-50 text-orange-700 border-orange-500 shadow-sm flex items-center gap-2 cursor-pointer hover:scale-105 transition-transform"
-                                            >
-                                                <span>🛠️</span> {s.cliente}
-                                            </span>
+                                            <span key={id} onClick={() => setModalDetalle({ open: true, data: s })} className="px-3 py-2 rounded-xl text-[9px] font-black border-l-4 bg-orange-50 text-orange-700 border-orange-500 shadow-sm flex items-center gap-2 cursor-pointer hover:scale-105 transition-transform"><span>🛠️</span> {s.cliente}</span>
                                         ))}
-                                        
-                                        {/* NOTAS MANUALES */}
                                         {tablaManual[`${diaFix}_${bloque}`] && Object.entries(tablaManual[`${diaFix}_${bloque}`]).map(([mId,m]:any) => (
                                             <span key={mId} className="px-3 py-2 rounded-xl text-[9px] font-black bg-amber-50 text-amber-700 border-l-4 border-amber-400 italic flex justify-between group">
                                                 {m.text}
@@ -375,11 +383,7 @@ const ControlDeRemitos: React.FC = () => {
                                         </div>
                                         <p className="font-bold text-slate-800 text-sm uppercase truncate max-w-[150px]">{item.cliente}</p>
                                         <p className="text-[9px] text-slate-400 mt-1 font-mono">{item.fechaEntrega ? item.fechaEntrega.split('T')[0] : 'Sin fecha'}</p>
-                                        
-                                        {/* --- DATO CHOFER --- */}
-                                        <p className="text-[10px] font-bold text-indigo-500 mt-1 flex items-center gap-1">
-                                            <span>🚚</span> {item.chofer || 'Sin chofer asignado'}
-                                        </p>
+                                        <p className="text-[10px] font-bold text-indigo-500 mt-1 flex items-center gap-1"><span>🚚</span> {item.chofer || 'Sin chofer asignado'}</p>
                                     </div>
                                     <div className="flex gap-2">
                                         <button onClick={() => setModalFirma({open: true, data: item, type: item._type})} className="p-2 bg-white rounded-lg shadow-sm hover:scale-110 transition-transform text-xl" title="Ver Firma">🖋️</button>
@@ -392,14 +396,11 @@ const ControlDeRemitos: React.FC = () => {
                 </div>
             </section>
 
-            {/* BOTÓN FLOTANTE */}
             <button onClick={() => setSidebarOpen(true)} className="fixed bottom-10 right-10 w-16 h-16 bg-blue-600 text-white rounded-full shadow-2xl flex items-center justify-center text-3xl font-bold z-50 hover:scale-110 active:scale-95 transition-all">+</button>
 
-            {/* --- MODAL DETALLE PEDIDO --- */}
             {modalDetalle.open && modalDetalle.data && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" onClick={() => setModalDetalle({ open: false, data: null })}>
                     <div className="bg-white rounded-[2rem] p-8 w-full max-w-lg shadow-2xl animate-in fade-in zoom-in duration-300" onClick={e => e.stopPropagation()}>
-                        
                         <div className="flex justify-between items-start mb-6 border-b border-slate-100 pb-4">
                             <div>
                                 <h3 className="text-2xl font-black text-slate-800 uppercase italic tracking-tighter">{modalDetalle.data.cliente}</h3>
@@ -411,15 +412,10 @@ const ControlDeRemitos: React.FC = () => {
                             </div>
                             <button onClick={() => setModalDetalle({ open: false, data: null })} className="text-slate-300 hover:text-slate-800 text-xl font-bold p-2">✕</button>
                         </div>
-
                         <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2">
-                            {/* Lista de Productos */}
                             <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
-                                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                    <span>📦</span> Detalle de Productos
-                                </h4>
+                                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><span>📦</span> Detalle de Productos</h4>
                                 <ul className="space-y-3">
-                                    {/* CASO REMITO (ARRAY DE OBJETOS) */}
                                     {modalDetalle.data.numeroRemito && Array.isArray(modalDetalle.data.articulos) && modalDetalle.data.articulos.map((art: any, i: number) => (
                                         <li key={i} className="text-sm font-bold text-slate-700 border-b border-slate-200 pb-2 last:border-0 last:pb-0 flex items-start gap-3">
                                             <span className="bg-white text-blue-600 border border-blue-100 px-2 py-0.5 rounded text-xs font-black min-w-[30px] text-center shadow-sm">{art.cantidad}</span>
@@ -429,28 +425,17 @@ const ControlDeRemitos: React.FC = () => {
                                             </div>
                                         </li>
                                     ))}
-
-                                    {/* CASO SOPORTE (ARRAY DE STRINGS) */}
                                     {modalDetalle.data.numeroSoporte && Array.isArray(modalDetalle.data.productos) && modalDetalle.data.productos.map((prod: string, i: number) => (
-                                        <li key={i} className="text-sm font-bold text-slate-700 border-b border-slate-200 pb-2 last:border-0 last:pb-0 flex items-center gap-3">
-                                            <span className="text-orange-500">•</span>
-                                            <p>{prod}</p>
-                                        </li>
+                                        <li key={i} className="text-sm font-bold text-slate-700 border-b border-slate-200 pb-2 last:border-0 last:pb-0 flex items-center gap-3"><span className="text-orange-500">•</span><p>{prod}</p></li>
                                     ))}
                                 </ul>
                             </div>
-
-                            {/* Aclaraciones (Solo Remitos) */}
                             {modalDetalle.data.aclaraciones && (
                                 <div className="bg-amber-50 p-5 rounded-2xl border border-amber-100 text-amber-800">
-                                    <h4 className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-                                        <span>📝</span> Observaciones
-                                    </h4>
+                                    <h4 className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-2 flex items-center gap-2"><span>📝</span> Observaciones</h4>
                                     <p className="text-xs font-bold italic leading-relaxed whitespace-pre-line">{modalDetalle.data.aclaraciones}</p>
                                 </div>
                             )}
-
-                            {/* Datos Extra */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
                                     <p className="text-[9px] font-black text-slate-400 uppercase">Fecha</p>
@@ -464,15 +449,11 @@ const ControlDeRemitos: React.FC = () => {
                                 )}
                             </div>
                         </div>
-
-                        <button onClick={() => setModalDetalle({ open: false, data: null })} className="w-full mt-6 p-4 bg-slate-900 text-white rounded-2xl font-black uppercase italic tracking-widest hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200">
-                            Cerrar
-                        </button>
+                        <button onClick={() => setModalDetalle({ open: false, data: null })} className="w-full mt-6 p-4 bg-slate-900 text-white rounded-2xl font-black uppercase italic tracking-widest hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200">Cerrar</button>
                     </div>
                 </div>
             )}
 
-            {/* MODAL FIRMA */}
             {modalFirma.open && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" onClick={() => setModalFirma({...modalFirma, open: false})}>
                     <div className="bg-white rounded-[2rem] p-8 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -484,22 +465,16 @@ const ControlDeRemitos: React.FC = () => {
                                     <p className="font-black text-slate-800 uppercase text-lg">{modalFirma.data.clienteFirma.nombre}</p>
                                     <p className="text-xs text-slate-500 font-bold">DNI: {modalFirma.data.clienteFirma.dni}</p>
                                 </div>
-                                <div className="border-2 border-dashed border-slate-200 rounded-2xl p-4 flex justify-center bg-white">
-                                    <img src={`data:image/png;base64,${modalFirma.data.clienteFirma.firma}`} className="max-h-40 object-contain" alt="Firma" />
-                                </div>
+                                <div className="border-2 border-dashed border-slate-200 rounded-2xl p-4 flex justify-center bg-white"><img src={`data:image/png;base64,${modalFirma.data.clienteFirma.firma}`} className="max-h-40 object-contain" alt="Firma" /></div>
                             </div>
                         ) : (
-                            <div className="p-10 text-center bg-slate-50 rounded-2xl text-slate-400 font-bold italic border border-slate-100">
-                                <p className="text-3xl mb-2">🤷‍♂️</p>
-                                Sin firma digital registrada.
-                            </div>
+                            <div className="p-10 text-center bg-slate-50 rounded-2xl text-slate-400 font-bold italic border border-slate-100"><p className="text-3xl mb-2">🤷‍♂️</p>Sin firma digital registrada.</div>
                         )}
                         <button onClick={() => setModalFirma({...modalFirma, open: false})} className="w-full mt-6 p-4 bg-slate-900 text-white rounded-2xl font-black uppercase italic tracking-widest hover:bg-slate-800 transition-colors">Cerrar</button>
                     </div>
                 </div>
             )}
 
-            {/* SIDEBAR DE CARGA */}
             {sidebarOpen && (
                 <div className="fixed inset-0 z-[100] flex justify-end">
                     <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
@@ -519,27 +494,12 @@ const ControlDeRemitos: React.FC = () => {
                             </div>
                             {tipoCarga === 'remito' && (
                                 <div className="space-y-6 animate-in fade-in duration-500">
-                                    <div>
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-2">Datos Remito y Cliente</label>
-                                        <textarea rows={6} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono" placeholder="Pega bloque completo aquí..." value={datosRemitoRaw} onChange={e => setDatosRemitoRaw(e.target.value)} />
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-2">Productos y Cantidades</label>
-                                        <textarea rows={4} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono" placeholder="Cantidad Código..." value={productosRaw} onChange={e => setProductosRaw(e.target.value)} />
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-2">Detalles / Aclaraciones</label>
-                                        <textarea rows={3} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono" placeholder="Ej: MPE 1200 ROJOS..." value={aclaracionesRaw} onChange={e => setAclaracionesRaw(e.target.value)} />
-                                    </div>
+                                    <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-2">Datos Remito y Cliente</label><textarea rows={6} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono" placeholder="Pega bloque completo aquí..." value={datosRemitoRaw} onChange={e => setDatosRemitoRaw(e.target.value)} /></div>
+                                    <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-2">Productos y Cantidades</label><textarea rows={4} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono" placeholder="Cantidad Código..." value={productosRaw} onChange={e => setProductosRaw(e.target.value)} /></div>
+                                    <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-2">Detalles / Aclaraciones</label><textarea rows={3} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono" placeholder="Ej: MPE 1200 ROJOS..." value={aclaracionesRaw} onChange={e => setAclaracionesRaw(e.target.value)} /></div>
                                     <div className="grid grid-cols-1 gap-3">
-                                        <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border cursor-pointer border-slate-100 hover:border-blue-500 transition-all">
-                                            <input type="checkbox" checked={esTransporte} onChange={e => setEsTransporte(e.target.checked)} className="w-5 h-5 rounded border-slate-300 text-blue-600" />
-                                            <span className="text-[11px] font-black text-slate-600 uppercase italic">Es Transporte</span>
-                                        </label>
-                                        <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border cursor-pointer border-slate-100 hover:border-green-500 transition-all">
-                                            <input type="checkbox" checked={necesitaProduccion} onChange={e => setNecesitaProduccion(e.target.checked)} className="w-5 h-5 rounded border-slate-300 text-green-600" />
-                                            <span className="text-[11px] font-black text-slate-600 uppercase italic text-green-600">Requiere Producción</span>
-                                        </label>
+                                        <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border cursor-pointer border-slate-100 hover:border-blue-500 transition-all"><input type="checkbox" checked={esTransporte} onChange={e => setEsTransporte(e.target.checked)} className="w-5 h-5 rounded border-slate-300 text-blue-600" /><span className="text-[11px] font-black text-slate-600 uppercase italic">Es Transporte</span></label>
+                                        <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border cursor-pointer border-slate-100 hover:border-green-500 transition-all"><input type="checkbox" checked={necesitaProduccion} onChange={e => setNecesitaProduccion(e.target.checked)} className="w-5 h-5 rounded border-slate-300 text-green-600" /><span className="text-[11px] font-black text-slate-600 uppercase italic text-green-600">Requiere Producción</span></label>
                                     </div>
                                 </div>
                             )}
@@ -552,9 +512,7 @@ const ControlDeRemitos: React.FC = () => {
                                 </div>
                             )}
                             {tipoCarga && (
-                                <button disabled={loading} onClick={guardarDatos} className="w-full mt-4 p-5 bg-slate-900 text-white rounded-[2rem] font-black uppercase italic tracking-widest shadow-xl hover:bg-blue-600 transition-all disabled:bg-slate-300">
-                                    {loading ? 'Sincronizando...' : 'Confirmar Carga'}
-                                </button>
+                                <button disabled={loading} onClick={guardarDatos} className="w-full mt-4 p-5 bg-slate-900 text-white rounded-[2rem] font-black uppercase italic tracking-widest shadow-xl hover:bg-blue-600 transition-all disabled:bg-slate-300">{loading ? 'Sincronizando...' : 'Confirmar Carga'}</button>
                             )}
                         </div>
                     </div>
@@ -564,9 +522,13 @@ const ControlDeRemitos: React.FC = () => {
     );
 };
 
-function StatCard({ label, val, color }: { label: string, val: number, color: string }) {
+// Componente StatCard actualizado con soporte para Clic
+function StatCard({ label, val, color, onClick, isActive }: { label: string, val: number, color: string, onClick?: () => void, isActive?: boolean }) {
     return (
-        <div className={`bg-slate-50 p-3 rounded-xl border-l-4 ${color} transition-transform hover:scale-105`}>
+        <div 
+            onClick={onClick}
+            className={`bg-slate-50 p-3 rounded-xl border-l-4 ${color} transition-all hover:scale-105 ${onClick ? 'cursor-pointer hover:bg-slate-100' : ''} ${isActive ? 'ring-2 ring-indigo-500 bg-indigo-50' : ''}`}
+        >
             <h2 className="text-[9px] font-bold text-slate-400 uppercase tracking-wide leading-none truncate">{label}</h2>
             <p className="text-2xl font-black text-slate-800 mt-1 italic leading-none">{val}</p>
         </div>
