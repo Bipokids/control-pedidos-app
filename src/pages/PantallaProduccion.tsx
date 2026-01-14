@@ -134,7 +134,7 @@ const PantallaProduccion: React.FC = () => {
                                         onClick={() => cambiarEstado(r.id, "Pendiente")}
                                         className="px-2 py-1 bg-white/80 text-slate-600 rounded text-[10px] font-bold uppercase hover:bg-white shadow-sm transition-colors border border-black/5"
                                     >
-                                        Pend
+                                        Pendiente
                                     </button>
                                     <button 
                                         onClick={() => cambiarEstado(r.id, "Listo")}
