@@ -14,6 +14,9 @@ const ControlDeRemitos: React.FC = () => {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [modalFirma, setModalFirma] = useState<{ open: boolean, data: any, type: 'remito' | 'soporte' }>({ open: false, data: null, type: 'remito' });
     
+    // MODAL DE DETALLE (Ahora acepta 'any' para manejar Remito o Soporte)
+    const [modalDetalle, setModalDetalle] = useState<{ open: boolean, data: any | null }>({ open: false, data: null });
+
     // CONTROLAR SI LA TABLA SE VE O NO
     const [tablaExpandida, setTablaExpandida] = useState(true);
 
@@ -53,15 +56,10 @@ const ControlDeRemitos: React.FC = () => {
     const rProduccion = Object.values(remitos).filter(r => r.produccion && r.estado === "Listo" && r.estadoPreparacion !== "Entregado").length;
     const rDespacho = Object.values(remitos).filter(r => r.estadoPreparacion === "Listo").length;
     
-    // --- LÓGICA CORREGIDA "SIN FECHA" ---
+    // LÓGICA SIN FECHA (VIOLETA)
     const rListosSinFecha = Object.values(remitos).filter(r => {
-        // 1. Si ya se entregó, no cuenta
         if (r.estadoPreparacion === "Entregado") return false;
-
-        // 2. Si TIENE rango asignado, no cuenta
         if (r.rangoDespacho && r.rangoDespacho !== "") return false;
-
-        // 3. Casos de Alerta (Sin fecha):
         if (r.produccion) {
             // A. PRODUCCIÓN: Cuenta si Producción ya terminó (Listo) y falta asignar fecha
             return r.estado === "Listo";
@@ -230,28 +228,22 @@ const ControlDeRemitos: React.FC = () => {
                                     let bgClass = index % 2 === 0 ? 'bg-white' : 'bg-gray-50'; // Default
                                     const sinRango = !r.rangoDespacho || r.rangoDespacho === "";
 
-                                    // --- LÓGICA DE COLORES DE FILA ---
-                                    
-                                    // 1. DESPACHADO (Celeste - Prioridad Máxima)
+                                    // Lógica de colores
                                     if (r.estadoPreparacion === 'Despachado') {
                                         bgClass = 'bg-cyan-100 text-cyan-900';
                                     } 
                                     else {
-                                        // CASO A: CON PRODUCCIÓN
                                         if (r.produccion) {
                                             if (r.estado === 'Listo') {
-                                                if (sinRango) bgClass = 'bg-purple-100 text-purple-900'; // ALERTA
+                                                if (sinRango) bgClass = 'bg-purple-100 text-purple-900';
                                                 else if (r.estadoPreparacion === 'Listo') bgClass = 'bg-green-100 text-green-900';
                                                 else bgClass = 'bg-yellow-100 text-yellow-900';
                                             }
                                         }
-                                        // CASO B: STOCK (Sin producción)
                                         else {
-                                            // Si es stock y está pendiente sin rango => VIOLETA (ALERTA)
                                             if (r.estadoPreparacion === 'Pendiente' && sinRango) {
                                                 bgClass = 'bg-purple-100 text-purple-900';
                                             }
-                                            // Si ya se preparó => VERDE
                                             else if (r.estadoPreparacion === 'Listo') {
                                                 bgClass = 'bg-green-100 text-green-900';
                                             }
@@ -262,7 +254,14 @@ const ControlDeRemitos: React.FC = () => {
 
                                     return (
                                         <tr key={id} className={`hover:bg-slate-200 transition-colors text-[11px] font-bold ${bgClass} ${borderClass}`}>
-                                            <td className="p-5 font-mono">#{r.numeroRemito}</td>
+                                            <td 
+                                                className="p-5 font-mono cursor-pointer hover:text-blue-600 hover:underline"
+                                                onClick={() => setModalDetalle({ open: true, data: r })}
+                                                title="Ver detalle del pedido"
+                                            >
+                                                #{r.numeroRemito}
+                                            </td>
+                                            
                                             <td className="p-5 uppercase">{r.cliente}</td>
                                             <td className="p-5 text-center">
                                                 <input type="checkbox" checked={r.produccion} onChange={(e) => update(ref(db_realtime, `remitos/${id}`), { produccion: e.target.checked })} className="w-4 h-4 rounded border-slate-300 text-blue-600" />
@@ -311,12 +310,30 @@ const ControlDeRemitos: React.FC = () => {
                                 >
                                     <p className="text-[10px] font-black text-blue-500 uppercase mb-3 tracking-widest text-center">{bloque}</p>
                                     <div className="flex flex-col gap-2">
+                                        {/* REMITOS */}
                                         {Object.entries(remitos).filter(([,r]) => r.rangoDespacho === match && r.estadoPreparacion !== "Entregado").map(([id,r]) => (
-                                            <span key={id} className={`px-3 py-2 rounded-xl text-[9px] font-black border-l-4 shadow-sm ${r.prioridad ? 'bg-red-50 text-red-700 border-red-500' : 'bg-blue-50 text-blue-700 border-blue-400'}`}>{r.cliente}</span>
+                                            <span 
+                                                key={id} 
+                                                onClick={() => setModalDetalle({ open: true, data: r })}
+                                                className={`px-3 py-2 rounded-xl text-[9px] font-black border-l-4 shadow-sm cursor-pointer hover:scale-105 transition-transform ${r.prioridad ? 'bg-red-50 text-red-700 border-red-500' : 'bg-blue-50 text-blue-700 border-blue-400'}`}
+                                            >
+                                                {r.cliente}
+                                            </span>
                                         ))}
+                                        
+                                        {/* SOPORTES */}
                                         {Object.entries(soportes).filter(([,s]) => s.rangoEntrega === match && s.estado !== "Entregado").map(([id,s]) => (
-                                            <span key={id} className="px-3 py-2 rounded-xl text-[9px] font-black border-l-4 bg-orange-50 text-orange-700 border-orange-500 shadow-sm flex items-center gap-2"><span>🛠️</span> {s.cliente}</span>
+                                            /* --- CLICK EN SOPORTE --- */
+                                            <span 
+                                                key={id} 
+                                                onClick={() => setModalDetalle({ open: true, data: s })}
+                                                className="px-3 py-2 rounded-xl text-[9px] font-black border-l-4 bg-orange-50 text-orange-700 border-orange-500 shadow-sm flex items-center gap-2 cursor-pointer hover:scale-105 transition-transform"
+                                            >
+                                                <span>🛠️</span> {s.cliente}
+                                            </span>
                                         ))}
+                                        
+                                        {/* NOTAS MANUALES */}
                                         {tablaManual[`${diaFix}_${bloque}`] && Object.entries(tablaManual[`${diaFix}_${bloque}`]).map(([mId,m]:any) => (
                                             <span key={mId} className="px-3 py-2 rounded-xl text-[9px] font-black bg-amber-50 text-amber-700 border-l-4 border-amber-400 italic flex justify-between group">
                                                 {m.text}
@@ -349,6 +366,11 @@ const ControlDeRemitos: React.FC = () => {
                                         </div>
                                         <p className="font-bold text-slate-800 text-sm uppercase truncate max-w-[150px]">{item.cliente}</p>
                                         <p className="text-[9px] text-slate-400 mt-1 font-mono">{item.fechaEntrega ? item.fechaEntrega.split('T')[0] : 'Sin fecha'}</p>
+                                        
+                                        {/* --- DATO CHOFER --- */}
+                                        <p className="text-[10px] font-bold text-indigo-500 mt-1 flex items-center gap-1">
+                                            <span>🚚</span> {item.chofer || 'Sin chofer asignado'}
+                                        </p>
                                     </div>
                                     <div className="flex gap-2">
                                         <button onClick={() => setModalFirma({open: true, data: item, type: item._type})} className="p-2 bg-white rounded-lg shadow-sm hover:scale-110 transition-transform text-xl" title="Ver Firma">🖋️</button>
@@ -363,6 +385,83 @@ const ControlDeRemitos: React.FC = () => {
 
             {/* BOTÓN FLOTANTE */}
             <button onClick={() => setSidebarOpen(true)} className="fixed bottom-10 right-10 w-16 h-16 bg-blue-600 text-white rounded-full shadow-2xl flex items-center justify-center text-3xl font-bold z-50 hover:scale-110 active:scale-95 transition-all">+</button>
+
+            {/* --- MODAL DETALLE PEDIDO --- */}
+            {modalDetalle.open && modalDetalle.data && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" onClick={() => setModalDetalle({ open: false, data: null })}>
+                    <div className="bg-white rounded-[2rem] p-8 w-full max-w-lg shadow-2xl animate-in fade-in zoom-in duration-300" onClick={e => e.stopPropagation()}>
+                        
+                        <div className="flex justify-between items-start mb-6 border-b border-slate-100 pb-4">
+                            <div>
+                                <h3 className="text-2xl font-black text-slate-800 uppercase italic tracking-tighter">{modalDetalle.data.cliente}</h3>
+                                {modalDetalle.data.numeroRemito ? (
+                                    <p className="text-blue-600 font-mono font-bold text-sm bg-blue-50 inline-block px-2 py-1 rounded-lg mt-1">Remito #{modalDetalle.data.numeroRemito}</p>
+                                ) : (
+                                    <p className="text-orange-600 font-mono font-bold text-sm bg-orange-50 inline-block px-2 py-1 rounded-lg mt-1">Soporte #{modalDetalle.data.numeroSoporte}</p>
+                                )}
+                            </div>
+                            <button onClick={() => setModalDetalle({ open: false, data: null })} className="text-slate-300 hover:text-slate-800 text-xl font-bold p-2">✕</button>
+                        </div>
+
+                        <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2">
+                            {/* Lista de Productos */}
+                            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                    <span>📦</span> Detalle de Productos
+                                </h4>
+                                <ul className="space-y-3">
+                                    {/* CASO REMITO (ARRAY DE OBJETOS) */}
+                                    {modalDetalle.data.numeroRemito && Array.isArray(modalDetalle.data.articulos) && modalDetalle.data.articulos.map((art: any, i: number) => (
+                                        <li key={i} className="text-sm font-bold text-slate-700 border-b border-slate-200 pb-2 last:border-0 last:pb-0 flex items-start gap-3">
+                                            <span className="bg-white text-blue-600 border border-blue-100 px-2 py-0.5 rounded text-xs font-black min-w-[30px] text-center shadow-sm">{art.cantidad}</span>
+                                            <div className="flex-1">
+                                                <p>{art.codigo}</p>
+                                                {art.detalle && <p className="text-[11px] text-slate-400 italic font-normal mt-0.5">{art.detalle}</p>}
+                                            </div>
+                                        </li>
+                                    ))}
+
+                                    {/* CASO SOPORTE (ARRAY DE STRINGS) */}
+                                    {modalDetalle.data.numeroSoporte && Array.isArray(modalDetalle.data.productos) && modalDetalle.data.productos.map((prod: string, i: number) => (
+                                        <li key={i} className="text-sm font-bold text-slate-700 border-b border-slate-200 pb-2 last:border-0 last:pb-0 flex items-center gap-3">
+                                            <span className="text-orange-500">•</span>
+                                            <p>{prod}</p>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+
+                            {/* Aclaraciones (Solo Remitos) */}
+                            {modalDetalle.data.aclaraciones && (
+                                <div className="bg-amber-50 p-5 rounded-2xl border border-amber-100 text-amber-800">
+                                    <h4 className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                        <span>📝</span> Observaciones
+                                    </h4>
+                                    <p className="text-xs font-bold italic leading-relaxed whitespace-pre-line">{modalDetalle.data.aclaraciones}</p>
+                                </div>
+                            )}
+
+                            {/* Datos Extra */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase">Fecha</p>
+                                    <p className="text-xs font-bold text-slate-700">{modalDetalle.data.fechaEmision || modalDetalle.data.fechaSoporte || '-'}</p>
+                                </div>
+                                {modalDetalle.data.numeroRemito && (
+                                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
+                                        <p className="text-[9px] font-black text-slate-400 uppercase">Tipo</p>
+                                        <p className="text-xs font-bold text-slate-700">{modalDetalle.data.esTransporte ? '🚛 Transporte' : '🏠 Domicilio'}</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <button onClick={() => setModalDetalle({ open: false, data: null })} className="w-full mt-6 p-4 bg-slate-900 text-white rounded-2xl font-black uppercase italic tracking-widest hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200">
+                            Cerrar
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* MODAL FIRMA */}
             {modalFirma.open && (
