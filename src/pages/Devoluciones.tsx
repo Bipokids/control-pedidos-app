@@ -10,8 +10,8 @@ import {
 // --- TIPOS ---
 interface Producto {
     id: string;
-    categoria?: string; // Opcional (para compatibilidad con datos viejos)
-    nombre: string;     // Este es el "Item"
+    categoria?: string; 
+    nombre: string;     
 }
 
 interface Devolucion {
@@ -50,16 +50,15 @@ const Devoluciones: React.FC = () => {
     const [tieneCosto, setTieneCosto] = useState(false);
     const [costo, setCosto] = useState("");
 
-    // Estados Carga de Producto Nuevo (SIMPLIFICADO)
+    // Estados Carga de Producto Nuevo
     const [modalProdOpen, setModalProdOpen] = useState(false);
-    const [newItemNombre, setNewItemNombre] = useState(""); // Solo pedimos el Item
+    const [newItemNombre, setNewItemNombre] = useState("");
 
     // Estado Estadísticas
     const [modalStatsOpen, setModalStatsOpen] = useState(false);
 
     // --- CARGA DE DATOS ---
     useEffect(() => {
-        // 1. Cargar Productos
         const unsubProd = onValue(ref(db_realtime, 'productos'), (snapshot) => {
             if (snapshot.exists()) {
                 const data = snapshot.val();
@@ -69,7 +68,6 @@ const Devoluciones: React.FC = () => {
             }
         });
 
-        // 2. Cargar Devoluciones
         const unsubDev = onValue(ref(db_realtime, 'devoluciones'), (snapshot) => {
             if (snapshot.exists()) {
                 const data = snapshot.val();
@@ -83,7 +81,7 @@ const Devoluciones: React.FC = () => {
         return () => { unsubProd(); unsubDev(); };
     }, []);
 
-    // --- LÓGICA DE FORMULARIO DEVOLUCIÓN ---
+    // --- LÓGICA DE FORMULARIO ---
     const sugerencias = useMemo(() => {
         if (!busquedaProd) return [];
         return productos.filter(p => 
@@ -96,10 +94,19 @@ const Devoluciones: React.FC = () => {
         if (!prodSeleccionado || !nroVenta || !motivo) return alert("Faltan datos obligatorios");
         
         try {
-            // Construimos el nombre completo (Si tiene categoría la usamos, sino solo el nombre)
             const nombreProductoFinal = prodSeleccionado.categoria 
                 ? `${prodSeleccionado.categoria} - ${prodSeleccionado.nombre}`
                 : prodSeleccionado.nombre;
+
+            // --- CORRECCIÓN DE COSTO ---
+            // 1. Tratamos el costo como texto primero
+            // 2. Eliminamos los puntos (separadores de miles)
+            // 3. Reemplazamos coma por punto (decimales) para que JS lo entienda
+            let costoFinal = 0;
+            if (tieneCosto && costo) {
+                const cleanValue = costo.toString().replace(/\./g, '').replace(',', '.');
+                costoFinal = parseFloat(cleanValue);
+            }
 
             await push(ref(db_realtime, 'devoluciones'), {
                 usuario: user?.email || "Desconocido",
@@ -109,10 +116,9 @@ const Devoluciones: React.FC = () => {
                 venta: nroVenta,
                 motivo,
                 tieneCosto,
-                costo: tieneCosto ? Number(costo) : 0
+                costo: !isNaN(costoFinal) ? costoFinal : 0
             });
             
-            // Reset form
             setBusquedaProd("");
             setProdSeleccionado(null);
             setNroVenta("");
@@ -125,15 +131,11 @@ const Devoluciones: React.FC = () => {
         }
     };
 
-    // GUARDAR PRODUCTO (SOLO ITEM)
     const guardarNuevoProducto = async () => {
         if (!newItemNombre) return;
-        
         await push(ref(db_realtime, 'productos'), {
             nombre: newItemNombre.toUpperCase()
-            // No guardamos categoría
         });
-        
         setNewItemNombre("");
         setModalProdOpen(false);
     };
@@ -150,13 +152,16 @@ const Devoluciones: React.FC = () => {
         return acc;
     }, {} as Record<string, Devolucion[]>);
 
-    // Estadísticas
+    // --- ESTADÍSTICAS ---
+    
+    // 1. Motivos (Globales)
     const statsMotivos = useMemo(() => {
         const counts: Record<string, number> = {};
         devoluciones.forEach(d => { counts[d.motivo] = (counts[d.motivo] || 0) + 1; });
         return Object.entries(counts).map(([name, value]) => ({ name, value }));
     }, [devoluciones]);
 
+    // 2. Productos (Globales)
     const statsProductos = useMemo(() => {
         const counts: Record<string, number> = {};
         devoluciones.forEach(d => { counts[d.producto] = (counts[d.producto] || 0) + 1; });
@@ -166,11 +171,18 @@ const Devoluciones: React.FC = () => {
             .slice(0, 5); 
     }, [devoluciones]);
 
+    // 3. Usuarios (Globales)
     const statsUsuarios = useMemo(() => {
         const counts: Record<string, number> = {};
         devoluciones.forEach(d => { counts[d.usuario] = (counts[d.usuario] || 0) + 1; });
         return Object.entries(counts).map(([name, value]) => ({ name: name.split('@')[0], value }));
     }, [devoluciones]);
+
+    // 4. Costo Total (SOLO DEL USUARIO LOGUEADO)
+    const costoTotalUsuario = useMemo(() => {
+        // Usamos 'misDevoluciones' que ya está filtrado por el usuario actual
+        return misDevoluciones.reduce((acc, curr) => acc + (curr.costo || 0), 0);
+    }, [misDevoluciones]);
 
 
     if (loading) return <div className="p-10 text-center font-bold animate-pulse">Cargando Sistema de Devoluciones...</div>;
@@ -184,7 +196,7 @@ const Devoluciones: React.FC = () => {
                     <h1 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">
                         Gestión <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-600 to-fuchsia-600">Devoluciones</span>
                     </h1>
-                    <p className="text-slate-500 font-medium text-sm">Registro y control de paquetería inversa.</p>
+                    <p className="text-slate-500 font-medium text-sm">Registro y control de devoluciones de ML.</p>
                     <p className="text-xs font-bold text-violet-500 mt-1 uppercase tracking-widest">
                         👤 Cuenta: {user?.email?.split('@')[0]}
                     </p>
@@ -208,14 +220,13 @@ const Devoluciones: React.FC = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 
-                {/* COLUMNA IZQUIERDA: FORMULARIO DE CARGA */}
+                {/* COLUMNA IZQUIERDA: FORMULARIO */}
                 <div className="lg:col-span-1 space-y-6">
                     <div className="bg-white p-6 rounded-[2.5rem] shadow-xl shadow-violet-100/50 border border-slate-100 relative overflow-hidden">
                         <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-violet-500 to-fuchsia-500"></div>
                         <h2 className="text-xl font-black text-slate-800 mb-6 uppercase italic">Registrar Paquete</h2>
                         
                         <div className="space-y-4">
-                            {/* 1. Buscador de Producto */}
                             <div className="relative">
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2 mb-1 block">Producto</label>
                                 <input 
@@ -225,7 +236,6 @@ const Devoluciones: React.FC = () => {
                                     onChange={(e) => { setBusquedaProd(e.target.value); setProdSeleccionado(null); }}
                                     className={`w-full p-4 border-2 rounded-2xl font-bold text-sm outline-none transition-all ${prodSeleccionado ? 'border-green-400 bg-green-50 text-green-800' : 'border-slate-100 bg-slate-50 focus:border-violet-400'}`}
                                 />
-                                {/* Sugerencias */}
                                 {busquedaProd && !prodSeleccionado && sugerencias.length > 0 && (
                                     <div className="absolute top-full left-0 right-0 bg-white border border-slate-100 rounded-xl shadow-xl z-20 mt-1 overflow-hidden">
                                         {sugerencias.map(p => (
@@ -246,7 +256,6 @@ const Devoluciones: React.FC = () => {
                                 )}
                             </div>
 
-                            {/* 2. Nro Venta */}
                             <div>
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2 mb-1 block">N° Venta / Ref</label>
                                 <input 
@@ -257,7 +266,6 @@ const Devoluciones: React.FC = () => {
                                 />
                             </div>
 
-                            {/* 3. Motivo */}
                             <div>
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2 mb-1 block">Motivo</label>
                                 <select 
@@ -270,7 +278,6 @@ const Devoluciones: React.FC = () => {
                                 </select>
                             </div>
 
-                            {/* 4. Costo */}
                             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                                 <div className="flex items-center justify-between mb-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">¿Generó Costo?</label>
@@ -283,8 +290,8 @@ const Devoluciones: React.FC = () => {
                                 </div>
                                 {tieneCosto && (
                                     <input 
-                                        type="number" 
-                                        placeholder="$ Importe..."
+                                        type="text" 
+                                        placeholder="$ Importe (ej: 10.000,50)"
                                         value={costo}
                                         onChange={(e) => setCosto(e.target.value)}
                                         className="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none focus:border-red-400 text-red-600"
@@ -345,14 +352,12 @@ const Devoluciones: React.FC = () => {
                 </div>
             </div>
 
-            {/* --- MODAL CARGA PRODUCTO SIMPLIFICADO --- */}
+            {/* --- MODAL CARGA PRODUCTO --- */}
             {modalProdOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" onClick={() => setModalProdOpen(false)}>
                     <div className="bg-white rounded-[2rem] p-8 w-full max-w-md shadow-2xl animate-in zoom-in" onClick={e => e.stopPropagation()}>
                         <h3 className="text-xl font-black text-slate-800 mb-4 uppercase italic">Nuevo Producto</h3>
                         <div className="space-y-4">
-                            
-                            {/* UN SOLO CAMPO: ITEM DEL PRODUCTO */}
                             <div>
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2 mb-1 block">Item del Producto</label>
                                 <input 
@@ -363,7 +368,6 @@ const Devoluciones: React.FC = () => {
                                     autoFocus
                                 />
                             </div>
-
                             <button onClick={guardarNuevoProducto} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-green-600 transition-colors shadow-lg">
                                 Guardar Producto
                             </button>
@@ -382,6 +386,16 @@ const Devoluciones: React.FC = () => {
                         </div>
                         
                         <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+                            
+                            {/* KPI COSTO TOTAL (SOLO PARA MI) */}
+                            <div className="bg-red-50 p-6 rounded-[2rem] border border-red-100 md:col-span-2 flex justify-between items-center shadow-sm">
+                                <div>
+                                    <h4 className="text-xs font-black text-red-400 uppercase tracking-widest mb-1">Mis Costos Totales</h4>
+                                    <p className="text-xs text-red-300 font-medium">Acumulado histórico de devoluciones con costo</p>
+                                </div>
+                                <p className="text-4xl font-black text-red-600">$ {costoTotalUsuario.toLocaleString()}</p>
+                            </div>
+
                             {/* 1. Motivos Frecuentes */}
                             <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100">
                                 <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 text-center">Motivos más frecuentes</h4>
