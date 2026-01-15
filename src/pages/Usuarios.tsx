@@ -4,10 +4,11 @@ import { ref, onValue, set, remove } from "firebase/database";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 
+// Actualizamos la interfaz para incluir 'vendedor'
 interface UserData {
     uid: string;
     email: string;
-    role: 'admin' | 'produccion';
+    role: 'admin' | 'produccion' | 'vendedor';
 }
 
 const Usuarios: React.FC = () => {
@@ -16,7 +17,10 @@ const Usuarios: React.FC = () => {
     // Formulario
     const [email, setEmail] = useState("");
     const [pass, setPass] = useState("");
-    const [role, setRole] = useState<'admin' | 'produccion'>("produccion");
+    
+    // Estado del rol actualizado para incluir 'vendedor'
+    const [role, setRole] = useState<'admin' | 'produccion' | 'vendedor'>("produccion");
+    
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
@@ -40,7 +44,6 @@ const Usuarios: React.FC = () => {
         setError("");
         setLoading(true);
 
-        // Inicializamos una app secundaria temporal para no cerrar sesión al admin
         const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
         const secondaryAuth = getAuth(secondaryApp);
 
@@ -55,7 +58,6 @@ const Usuarios: React.FC = () => {
                 role: role
             });
 
-            // Limpiar form
             setEmail("");
             setPass("");
             alert("✅ Usuario creado con éxito");
@@ -64,13 +66,12 @@ const Usuarios: React.FC = () => {
             console.error(err);
             setError(err.message || "Error al crear usuario");
         } finally {
-            // Importante: Eliminar la app secundaria para liberar memoria
             await deleteApp(secondaryApp);
             setLoading(false);
         }
     };
 
-    // 3. Eliminar Usuario (Solo de la DB y acceso visual)
+    // 3. Eliminar Usuario
     const eliminarUsuario = async (uid: string, email: string) => {
         if (!window.confirm(`¿Eliminar acceso a ${email}? \nNota: Esto quita el rol, pero el usuario sigue existiendo en Auth.`)) return;
         
@@ -78,6 +79,15 @@ const Usuarios: React.FC = () => {
             await remove(ref(db_realtime, `users/${uid}`));
         } catch (e) {
             alert("Error al eliminar");
+        }
+    };
+
+    // Helper para color de badge según rol
+    const getRoleBadgeStyle = (rol: string) => {
+        switch(rol) {
+            case 'admin': return 'bg-purple-100 text-purple-700 border-purple-200';
+            case 'vendedor': return 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200'; // Color distintivo para vendedor
+            default: return 'bg-blue-100 text-blue-700 border-blue-200';
         }
     };
 
@@ -129,11 +139,12 @@ const Usuarios: React.FC = () => {
                     <div className="md:col-span-1">
                         <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Rol</label>
                         <select 
-                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-pink-500"
+                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-pink-500 cursor-pointer"
                             value={role} onChange={e => setRole(e.target.value as any)}
                         >
                             <option value="produccion">🏭 Producción</option>
                             <option value="admin">🛡️ Admin</option>
+                            <option value="vendedor">🛍️ Vendedor ML</option> {/* Opción nueva */}
                         </select>
                     </div>
 
@@ -154,11 +165,7 @@ const Usuarios: React.FC = () => {
                     <div key={u.uid} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex justify-between items-center group hover:shadow-md transition-all">
                         <div>
                             <div className="flex items-center gap-2 mb-1">
-                                <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${
-                                    u.role === 'admin' 
-                                    ? 'bg-purple-100 text-purple-700' 
-                                    : 'bg-blue-100 text-blue-700'
-                                }`}>
+                                <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase border ${getRoleBadgeStyle(u.role)}`}>
                                     {u.role}
                                 </span>
                                 <span className="text-[9px] font-mono text-slate-300">UID: {u.uid.slice(0,5)}...</span>

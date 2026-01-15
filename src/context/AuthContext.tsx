@@ -3,9 +3,12 @@ import { auth, db_realtime } from '../firebase/config';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from 'firebase/auth';
 import { ref, get } from 'firebase/database';
 
+// 1. DEFINIMOS EL TIPO 'Role' PARA INCLUIR 'vendedor'
+export type Role = 'admin' | 'produccion' | 'vendedor' | null;
+
 interface AuthContextType {
   user: User | null;
-  role: 'admin' | 'produccion' | null;
+  role: Role; // Usamos el tipo actualizado
   loading: boolean;
   login: (e: string, p: string) => Promise<void>;
   logout: () => void;
@@ -19,20 +22,29 @@ export const useAuth = () => useContext(AuthContext);
 // 👇 ESTE ES EL OTRO EXPORT QUE BUSCA APP.TSX
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [role, setRole] = useState<'admin' | 'produccion' | null>(null);
+  const [role, setRole] = useState<Role>(null); // Estado con el tipo actualizado
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setLoading(true);
+      setLoading(true); // Bloqueamos UI mientras cargamos rol
       if (currentUser) {
         // Intentar leer el rol
         try {
-            const snapshot = await get(ref(db_realtime, `users/${currentUser.uid}/role`));
+            // Intentamos leer directamente el nodo 'role'
+            let snapshot = await get(ref(db_realtime, `users/${currentUser.uid}/role`));
+            
             if (snapshot.exists()) {
-                setRole(snapshot.val());
+                setRole(snapshot.val() as Role);
             } else {
-                setRole(null); // Usuario sin rol definido
+                // Fallback: Si no existe users/uid/role, buscamos en users/uid (objeto completo)
+                // Esto es útil por si la estructura de guardado varía ligeramente
+                snapshot = await get(ref(db_realtime, `users/${currentUser.uid}`));
+                if (snapshot.exists() && snapshot.val().role) {
+                    setRole(snapshot.val().role as Role);
+                } else {
+                    setRole(null); // Usuario sin rol definido
+                }
             }
         } catch (error) {
             console.error("Error leyendo rol:", error);
@@ -54,6 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     signOut(auth);
+    setRole(null);
   };
 
   return (

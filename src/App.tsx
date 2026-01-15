@@ -11,7 +11,8 @@ import Login from './pages/Login';
 import Usuarios from './pages/Usuarios';
 import Estadisticas from './pages/Estadisticas';
 import SoportesRetirados from './pages/SoportesRetirados';
-import Pagos from './pages/Pagos'; // <--- 1. IMPORTAR PAGOS
+import Pagos from './pages/Pagos';
+import Devoluciones from './pages/Devoluciones'; // <--- Importamos Devoluciones
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 interface NavButtonProps {
@@ -53,7 +54,7 @@ const AppContent = () => {
   // Estado para la alerta de retiros
   const [retirosPendientes, setRetirosPendientes] = useState(0);
 
-  // 1. Escuchar Soportes Retirados para la alerta en el menú
+  // 1. Escuchar Soportes Retirados para la alerta en el menú (Solo Admin)
   useEffect(() => {
     if (role !== 'admin') return;
 
@@ -78,7 +79,8 @@ const AppContent = () => {
       historial: 'Historial',
       estadisticas: 'Dashboard',
       retiros: 'Soportes Retirados',
-      pagos: 'Control Pagos', // <--- Título para la pestaña
+      pagos: 'Control Pagos',
+      devoluciones: 'Devoluciones', // <--- Titulo nuevo
       produccion: 'Producción',
       contador: 'Monitor',
       gestion_soportes: 'Taller',
@@ -89,13 +91,17 @@ const AppContent = () => {
     document.title = `${titulo} | Bipokids`;
   }, [paginaActual]);
 
-  // Seguridad
+  // Seguridad: Redirección inicial según rol
   useEffect(() => {
-    // Agregamos 'pagos' a la lista de restricción para producción
-    if (role === 'produccion' && ['remitos', 'control_soportes', 'historial', 'usuarios', 'estadisticas', 'retiros', 'pagos'].includes(paginaActual)) {
-      setPaginaActual('produccion');
-    } else if (role === 'admin') {
-       if(paginaActual === 'produccion') setPaginaActual('remitos');
+    // Si es admin entra a logística por defecto si estaba en producción
+    if (role === 'admin' && paginaActual === 'produccion') setPaginaActual('remitos');
+    
+    // Si es vendedor entra a devoluciones por defecto
+    if (role === 'vendedor' && paginaActual !== 'devoluciones') setPaginaActual('devoluciones');
+    
+    // Si es producción, lo mantenemos en producción (o contador/gestion)
+    if (role === 'produccion' && !['produccion', 'contador', 'gestion_soportes'].includes(paginaActual)) {
+        setPaginaActual('produccion');
     }
   }, [role]);
 
@@ -113,7 +119,7 @@ const AppContent = () => {
           <>
             <NavButton active={paginaActual === 'remitos'} onClick={() => setPaginaActual('remitos')} icon="🚚" label="Logística" />
             
-            {/* BOTÓN SOPORTES CON ALERTA INTEGRADA */}
+            {/* BOTÓN SOPORTES CON ALERTA */}
             <NavButton 
                 active={paginaActual === 'control_soportes' || paginaActual === 'retiros'} 
                 onClick={() => setPaginaActual('control_soportes')} 
@@ -123,23 +129,34 @@ const AppContent = () => {
             />
             
             <NavButton active={paginaActual === 'historial'} onClick={() => setPaginaActual('historial')} icon="🗂️" label="Despachos" />
-            
-            {/* NUEVO BOTÓN PAGOS */}
             <NavButton active={paginaActual === 'pagos'} onClick={() => setPaginaActual('pagos')} icon="💰" label="Pagos" />
             
-            <NavButton active={paginaActual === 'estadisticas'} onClick={() => setPaginaActual('estadisticas')} icon="📊" label="Métricas" />
+            <div className="w-10 h-[1px] bg-slate-800 my-1"></div>
           </>
         )}
 
+        {/* 2. GRUPO DEVOLUCIONES (Admin + Vendedores) */}
+        {(role === 'admin' || role === 'vendedor') && (
+            <NavButton active={paginaActual === 'devoluciones'} onClick={() => setPaginaActual('devoluciones')} icon="↩️" label="Devoluc." />
+        )}
+
+        {role === 'admin' && (
+             <NavButton active={paginaActual === 'estadisticas'} onClick={() => setPaginaActual('estadisticas')} icon="📊" label="Métricas" />
+        )}
+
         {/* Separador */}
-        {role === 'admin' && <div className="w-10 h-[1px] bg-slate-800 my-1"></div>}
+        {(role === 'admin' || role === 'produccion') && <div className="w-10 h-[1px] bg-slate-800 my-1"></div>}
 
-        {/* 2. GRUPO OPERATIVO */}
-        <NavButton active={paginaActual === 'contador'} onClick={() => setPaginaActual('contador')} icon="🔢" label="Contador" />
-        <NavButton active={paginaActual === 'produccion'} onClick={() => setPaginaActual('produccion')} icon="⚙️" label="Producción" />
-        <NavButton active={paginaActual === 'gestion_soportes'} onClick={() => setPaginaActual('gestion_soportes')} icon="🔧" label="Reparación" />
+        {/* 3. GRUPO OPERATIVO (Visible para todos menos vendedor puro) */}
+        {role !== 'vendedor' && (
+            <>
+                <NavButton active={paginaActual === 'contador'} onClick={() => setPaginaActual('contador')} icon="🔢" label="Contador" />
+                <NavButton active={paginaActual === 'produccion'} onClick={() => setPaginaActual('produccion')} icon="⚙️" label="Producción" />
+                <NavButton active={paginaActual === 'gestion_soportes'} onClick={() => setPaginaActual('gestion_soportes')} icon="🔧" label="Reparación" />
+            </>
+        )}
 
-        {/* 3. GRUPO SISTEMA */}
+        {/* 4. GRUPO SISTEMA */}
         {role === 'admin' && (
            <>
              <div className="w-10 h-[1px] bg-slate-800 my-1"></div>
@@ -147,7 +164,7 @@ const AppContent = () => {
            </>
         )}
 
-        {/* 4. CERRAR SESIÓN */}
+        {/* 5. CERRAR SESIÓN */}
         <div className="mt-auto pb-4">
              <button onClick={logout} className="w-10 h-10 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors" title="Cerrar Sesión">
                 ✕
@@ -157,23 +174,34 @@ const AppContent = () => {
 
       {/* ÁREA DE CONTENIDO */}
       <main className="flex-1 ml-24 transition-all duration-300">
-        {paginaActual === 'remitos' && role === 'admin' && <ControlDeRemitos />}
         
-        {paginaActual === 'retiros' && role === 'admin' && <SoportesRetirados />}
-        {paginaActual === 'control_soportes' && role === 'admin' && <ControlSoportes onNavigate={setPaginaActual} />}
+        {/* VISTAS ADMIN */}
+        {role === 'admin' && (
+            <>
+                {paginaActual === 'remitos' && <ControlDeRemitos />}
+                {paginaActual === 'retiros' && <SoportesRetirados />}
+                {paginaActual === 'control_soportes' && <ControlSoportes onNavigate={setPaginaActual} />}
+                {paginaActual === 'historial' && <HistorialDespachos />}
+                {paginaActual === 'pagos' && <Pagos />}
+                {paginaActual === 'estadisticas' && <Estadisticas />}
+                {paginaActual === 'usuarios' && <Usuarios />}
+            </>
+        )}
+
+        {/* VISTAS DEVOLUCIONES (Admin + Vendedor) */}
+        {(role === 'admin' || role === 'vendedor') && paginaActual === 'devoluciones' && (
+            <Devoluciones />
+        )}
         
-        {paginaActual === 'historial' && role === 'admin' && <HistorialDespachos />}
-        
-        {/* RENDERIZADO DE PAGOS */}
-        {paginaActual === 'pagos' && role === 'admin' && <Pagos />}
-        
-        {paginaActual === 'estadisticas' && role === 'admin' && <Estadisticas />}
-        
-        {paginaActual === 'contador' && <ContadorArmados />}
-        {paginaActual === 'produccion' && <PantallaProduccion />}
-        {paginaActual === 'gestion_soportes' && <GestionSoportes />}
-        
-        {paginaActual === 'usuarios' && role === 'admin' && <Usuarios />}
+        {/* VISTAS OPERATIVAS (Todos menos vendedor puro) */}
+        {role !== 'vendedor' && (
+            <>
+                {paginaActual === 'contador' && <ContadorArmados />}
+                {paginaActual === 'produccion' && <PantallaProduccion />}
+                {paginaActual === 'gestion_soportes' && <GestionSoportes />}
+            </>
+        )}
+
       </main>
 
     </div>
