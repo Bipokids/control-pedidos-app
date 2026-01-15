@@ -213,7 +213,7 @@ const Devoluciones: React.FC = () => {
                         onClick={() => setModalStatsOpen(true)}
                         className="px-4 py-3 bg-slate-900 text-white rounded-2xl shadow-lg hover:bg-violet-600 font-bold text-xs flex items-center gap-2 uppercase tracking-wide transition-all"
                     >
-                        📊 Estadísticas Globales
+                        📊 Estadísticas
                     </button>
                 </div>
             </header>
