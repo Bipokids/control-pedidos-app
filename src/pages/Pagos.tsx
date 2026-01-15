@@ -18,12 +18,11 @@ const Pagos: React.FC = () => {
                 const lista = Object.entries(data)
                     .map(([id, val]: any) => ({ ...val, id }))
                     .filter((item: any) => item.tipo === "Pago")
-                    .sort((a, b) => (a.estado === 'Registrado' ? 1 : -1));
+                    .sort((a, b) => (a.estado === 'Registrado' ? 1 : -1)); // Ordenar: Pendientes primero
                 
                 setPagos(lista);
 
-                // Extraer fechas únicas para el selector
-                // Asumimos formato dd/mm/yyyy hh:mm o similar. Cortamos solo la fecha (primera parte)
+                // Extraer fechas únicas
                 const fechasUnicas = Array.from(new Set(lista.map((p: any) => p.fecha?.split(' ')[0]))).sort().reverse();
                 setFechasDisponibles(fechasUnicas as string[]);
             } else {
@@ -47,6 +46,7 @@ const Pagos: React.FC = () => {
     const marcarRegistrado = async (id: string) => {
         if (window.confirm("¿Confirmar que este pago ha sido ingresado en caja?")) {
             try {
+                // Al usar 'update', los campos estadoControl y sobreCerrado SE MANTIENEN en la base de datos
                 await update(ref(db_realtime, `soportesypagos/${id}`), {
                     estado: "Registrado",
                     fechaRegistro: new Date().toISOString()
@@ -134,6 +134,9 @@ const Pagos: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {pagosFiltrados.map((pago) => {
                         const esRegistrado = pago.estado === "Registrado";
+                        const estadoControl = pago.estadoControl || "A Controlar"; 
+                        const esControlado = estadoControl === "Controlado";
+                        const sobreCerrado = pago.sobreCerrado || false;
                         
                         return (
                             <div 
@@ -145,14 +148,22 @@ const Pagos: React.FC = () => {
                                 }`}
                             >
                                 {/* Header Tarjeta */}
-                                <div className="flex justify-between items-start mb-6 border-b border-dashed border-slate-200 pb-4">
+                                <div className="flex justify-between items-start mb-4 border-b border-dashed border-slate-200 pb-4">
                                     <div>
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Cliente</p>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</p>
+                                            {/* Badge Sobre Cerrado (Visible SIEMPRE si es true) */}
+                                            {sobreCerrado && (
+                                                <span className="bg-amber-100 text-amber-600 px-2 py-0.5 rounded text-[9px] font-black uppercase flex items-center gap-1 border border-amber-200">
+                                                    ✉️ Sobre Cerrado
+                                                </span>
+                                            )}
+                                        </div>
                                         <h3 className="text-lg font-black text-slate-800 uppercase leading-tight truncate max-w-[180px]" title={pago.cliente}>
                                             {pago.cliente}
                                         </h3>
                                     </div>
-                                    <div className="text-right">
+                                    <div className="text-right flex flex-col gap-1 items-end">
                                         {esRegistrado ? (
                                             <span className="bg-slate-200 text-slate-500 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wide">
                                                 Registrado
@@ -162,6 +173,15 @@ const Pagos: React.FC = () => {
                                                 Nuevo
                                             </span>
                                         )}
+                                        
+                                        {/* Badge Estado Control (VISIBLE SIEMPRE) */}
+                                        <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border ${
+                                            esControlado 
+                                                ? 'bg-blue-50 text-blue-600 border-blue-100' 
+                                                : 'bg-yellow-50 text-yellow-600 border-yellow-100'
+                                        } ${esRegistrado ? 'opacity-70' : ''}`}>
+                                            {estadoControl}
+                                        </span>
                                     </div>
                                 </div>
 
@@ -199,7 +219,7 @@ const Pagos: React.FC = () => {
                                             onClick={() => marcarRegistrado(pago.id)}
                                             className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-emerald-600 transition-colors shadow-lg active:scale-95"
                                         >
-                                            ✅ Registrar
+                                            ✅ Registrar en Caja
                                         </button>
                                     )}
                                     
