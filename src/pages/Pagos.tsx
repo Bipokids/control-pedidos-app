@@ -155,7 +155,7 @@ const Pagos: React.FC = () => {
                                     <div className="text-right">
                                         {esRegistrado ? (
                                             <span className="bg-slate-200 text-slate-500 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wide">
-                                                Archivado
+                                                Registrado
                                             </span>
                                         ) : (
                                             <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wide animate-pulse">
