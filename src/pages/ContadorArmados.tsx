@@ -3,7 +3,7 @@ import { db_realtime } from '../firebase/config';
 import { ref, onValue } from "firebase/database";
 import type { Remito } from '../types';
 
-// Configuración por defecto (si es la primera vez que entras)
+// Configuración por defecto
 const CONFIG_DEFAULT = {
     "PRO CITY": ["R12", "R16", "R20", "R24", "R26"],
     "ALUMINIO": ["RA 12", "RA 16", "RA 20"],
@@ -14,7 +14,9 @@ const ContadorArmados: React.FC = () => {
     const [remitos, setRemitos] = useState<Record<string, Remito>>({});
     const [config, setConfig] = useState<Record<string, string[]>>(CONFIG_DEFAULT);
     const [conteos, setConteos] = useState<Record<string, number>>({});
-    const [totales, setTotales] = useState({ pendientes: 0, listos: 0 });
+    
+    // Ahora 'totales' incluye 'despachados'
+    const [totales, setTotales] = useState({ pendientes: 0, listos: 0, despachados: 0 });
     
     // Estado Modal Configuración
     const [modalOpen, setModalOpen] = useState(false);
@@ -24,21 +26,19 @@ const ContadorArmados: React.FC = () => {
 
     // 1. Cargar Configuración Local y Datos Firebase
     useEffect(() => {
-        // Cargar config guardada
         const savedConfig = localStorage.getItem('contador_config');
         if (savedConfig) {
             setConfig(JSON.parse(savedConfig));
             setTempConfig(JSON.parse(savedConfig));
         }
 
-        // Cargar Remitos
         const unsubscribe = onValue(ref(db_realtime, 'remitos'), (snapshot) => {
             setRemitos(snapshot.val() || {});
         });
         return () => unsubscribe();
     }, []);
 
-    // 2. Calcular Conteos cuando cambian datos o configuración
+    // 2. Calcular Conteos
     useEffect(() => {
         calcularConteos();
     }, [remitos, config]);
@@ -49,42 +49,67 @@ const ContadorArmados: React.FC = () => {
         const nuevosConteos: Record<string, number> = {};
         let totalP = 0;
         let totalL = 0;
+        let totalD = 0;
 
-        // Inicializar contadores en 0 según la config actual
+        // Inicializar contadores
         Object.values(config).flat().forEach(codigo => {
             nuevosConteos[normalize(codigo)] = 0;
         });
 
         Object.values(remitos).forEach(r => {
-            // Lógica de estado (Replicada de tu HTML)
-            const estado = normalize(r.estado);
-            const estadoPrep = normalize(r.estadoPreparacion);
+            // Solo procesamos si requiere producción
+            if (!r.produccion) return;
 
-            const isListo = 
-                estado === "LISTO" || 
-                estado === "DESPACHADO" || 
-                ((!estado || estado === "LISTO") && ["LISTO", "PENDIENTE", "DESPACHADO"].includes(estadoPrep));
+            const estado = normalize(r.estado || "PENDIENTE"); // Si es null, es Pendiente
+            const estadoPrep = normalize(r.estadoPreparacion || "PENDIENTE");
 
-            if (r.articulos) {
+            // LÓGICA DE ESTADOS SOLICITADA
+            let tipoSuma: 'pendiente' | 'listo' | 'despachado' | null = null;
+
+            // 1. Pendientes (Prod: Pendiente, Prep: Pendiente)
+            if (estado === "PENDIENTE" && estadoPrep === "PENDIENTE") {
+                tipoSuma = 'pendiente';
+            }
+            // 2. Listos Caso 1 (Prod: Listo, Prep: Pendiente)
+            else if (estado === "LISTO" && estadoPrep === "PENDIENTE") {
+                tipoSuma = 'listo';
+            }
+            // 3. Listos Caso 2 (Prod: Listo, Prep: Listo)
+            else if (estado === "LISTO" && estadoPrep === "LISTO") {
+                tipoSuma = 'listo';
+            }
+            // 4. Despachados (Prod: Despachado, Prep: Despachado)
+            else if (estado === "DESPACHADO" && estadoPrep === "DESPACHADO") {
+                tipoSuma = 'despachado';
+            }
+            // Nota: Cualquier otra combinación no se suma (ej: Prod: Pendiente, Prep: Listo - caso raro/error)
+
+            if (tipoSuma && r.articulos) {
                 r.articulos.forEach(art => {
                     const codigoArt = normalize(art.codigo);
                     const cantidad = Number(art.cantidad || 0);
 
-                    // Verificamos si este código está en nuestra configuración
+                    // Si el código está en nuestra configuración, lo sumamos al desglose visual
                     if (nuevosConteos.hasOwnProperty(codigoArt)) {
-                        if (isListo) {
-                            totalL += cantidad;
-                        } else {
+                        // OJO: La caja visual de "conteos" (los cuadros grandes) generalmente muestra lo que hay que armar (Pendientes).
+                        // Si quieres que muestre TODO, habría que sumar siempre. 
+                        // Pero normalmente un contador de producción muestra la "carga de trabajo".
+                        // Asumiremos que los cuadros muestran PENDIENTES.
+                        if (tipoSuma === 'pendiente') {
                             nuevosConteos[codigoArt] += cantidad;
-                            totalP += cantidad;
                         }
                     }
+
+                    // Sumar a los totales globales
+                    if (tipoSuma === 'pendiente') totalP += cantidad;
+                    if (tipoSuma === 'listo') totalL += cantidad;
+                    if (tipoSuma === 'despachado') totalD += cantidad;
                 });
             }
         });
 
         setConteos(nuevosConteos);
-        setTotales({ pendientes: totalP, listos: totalL });
+        setTotales({ pendientes: totalP, listos: totalL, despachados: totalD });
     };
 
     // --- GESTIÓN DE CONFIGURACIÓN ---
@@ -157,7 +182,7 @@ const ContadorArmados: React.FC = () => {
                             <div className="h-[1px] bg-slate-100 flex-1"></div>
                         </div>
 
-                        {/* ITEMS (Flex para centrar + Ancho fijo para uniformidad) */}
+                        {/* ITEMS */}
                         <div className="flex flex-wrap justify-center gap-3">
                             {items.map(codigo => (
                                 <div 
@@ -167,6 +192,7 @@ const ContadorArmados: React.FC = () => {
                                     <span className="block text-[9px] font-black text-slate-400 uppercase mb-0.5 truncate px-1" title={codigo}>
                                         {codigo}
                                     </span>
+                                    {/* Muestra la cantidad PENDIENTE de armar */}
                                     <span className="block text-2xl font-black text-blue-600 group-hover:scale-110 transition-transform leading-none">
                                         {conteos[normalize(codigo)] || 0}
                                     </span>
@@ -177,19 +203,24 @@ const ContadorArmados: React.FC = () => {
                 ))}
             </div>
 
-            {/* TOTALES COMPACTOS */}
-            <div className="grid grid-cols-2 gap-4 max-w-lg mx-auto">
-                <div className="bg-white p-3 rounded-2xl shadow-sm border border-yellow-400 text-center hover:shadow-md transition-shadow">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total Pendientes</p>
-                    <p className="text-3xl font-black text-slate-800 mt-1">{totales.pendientes}</p>
+            {/* TOTALES COMPACTOS (3 COLUMNAS AHORA) */}
+            <div className="grid grid-cols-3 gap-4 max-w-2xl mx-auto">
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-yellow-400 text-center hover:shadow-md transition-shadow">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Pendientes</p>
+                    <p className="text-4xl font-black text-slate-800 mt-1">{totales.pendientes}</p>
                 </div>
-                <div className="bg-white p-3 rounded-2xl shadow-sm border border-green-500 text-center hover:shadow-md transition-shadow">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total Listos</p>
-                    <p className="text-3xl font-black text-slate-800 mt-1">{totales.listos}</p>
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-green-500 text-center hover:shadow-md transition-shadow">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Listos</p>
+                    <p className="text-4xl font-black text-slate-800 mt-1">{totales.listos}</p>
+                </div>
+                {/* NUEVO CONTADOR DESPACHADOS */}
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-cyan-500 text-center hover:shadow-md transition-shadow">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Despachados</p>
+                    <p className="text-4xl font-black text-slate-800 mt-1">{totales.despachados}</p>
                 </div>
             </div>
 
-            {/* MODAL CONFIGURACIÓN (Mismo que antes) */}
+            {/* MODAL CONFIGURACIÓN (Sin cambios funcionales, solo estética heredada) */}
             {modalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" onClick={() => setModalOpen(false)}>
                     <div className="bg-white rounded-[2rem] w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
