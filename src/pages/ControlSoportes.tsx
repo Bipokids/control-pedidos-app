@@ -3,21 +3,43 @@ import { db_realtime } from '../firebase/config';
 import { ref, onValue, update, remove } from "firebase/database";
 import type { Soporte } from '../types';
 
-const ControlSoportes: React.FC = () => {
+// Definimos la prop para recibir la función de navegación desde App.tsx
+interface Props {
+    onNavigate?: (page: string) => void;
+}
+
+const ControlSoportes: React.FC<Props> = ({ onNavigate }) => {
     const [soportes, setSoportes] = useState<Record<string, Soporte>>({});
     const [filtro, setFiltro] = useState("");
     const [filtroEstado, setFiltroEstado] = useState("");
+    
+    // Estado para el contador de alertas (Retiros pendientes)
+    const [retirosPendientes, setRetirosPendientes] = useState(0);
 
     const rangos = ["Lunes Mañana", "Lunes Tarde", "Martes Mañana", "Martes Tarde", "Miércoles Mañana", "Miércoles Tarde", "Jueves Mañana", "Jueves Tarde", "Viernes Mañana", "Viernes Tarde"];
 
     useEffect(() => {
-        const unsubscribe = onValue(ref(db_realtime, 'soportes'), (snapshot) => {
+        // 1. Escuchar los Soportes del taller
+        const unsubSoportes = onValue(ref(db_realtime, 'soportes'), (snapshot) => {
             setSoportes(snapshot.val() || {});
         });
-        return () => unsubscribe();
+
+        // 2. Escuchar los Retiros (Ingresos) para la alerta roja
+        const unsubRetiros = onValue(ref(db_realtime, 'soportesypagos'), (snapshot) => {
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                // Filtramos solo los que son tipo "Soporte"
+                const count = Object.values(data).filter((item: any) => item.tipo === "Soporte").length;
+                setRetirosPendientes(count);
+            } else {
+                setRetirosPendientes(0);
+            }
+        });
+
+        return () => { unsubSoportes(); unsubRetiros(); };
     }, []);
 
-    // --- LÓGICA DE DATOS ---
+    // --- LÓGICA DE FILTRADO Y ORDENAMIENTO ---
     const listaSoportes = Object.entries(soportes).map(([id, s]) => ({ ...s, id }));
 
     const pendientes = listaSoportes
@@ -42,11 +64,9 @@ const ControlSoportes: React.FC = () => {
         update(ref(db_realtime, `soportes/${id}`), { rangoEntrega: rango });
     };
 
-    // FUNCIÓN DUAL (PENDIENTE <-> RESUELTO)
     const toggleEstadoSoporte = (id: string, estadoActual: string) => {
         const esResuelto = estadoActual === "Resuelto";
         const nuevoEstado = esResuelto ? "Pendiente" : "Resuelto";
-        
         const mensaje = esResuelto 
             ? "¿El equipo NO está listo? Se volverá a marcar como PENDIENTE."
             : "¿Confirmar que el equipo está reparado y LISTO?";
@@ -54,11 +74,7 @@ const ControlSoportes: React.FC = () => {
         if(!window.confirm(mensaje)) return;
 
         const updates: any = { estado: nuevoEstado };
-        
-        // Si volvemos a pendiente, limpiamos el rango para que no salga en logística por error
-        if (esResuelto) {
-            updates.rangoEntrega = ""; 
-        }
+        if (esResuelto) updates.rangoEntrega = ""; 
 
         update(ref(db_realtime, `soportes/${id}`), updates);
     };
@@ -85,7 +101,26 @@ const ControlSoportes: React.FC = () => {
                     <p className="text-slate-500 font-medium text-sm">Administración y entregas técnicas.</p>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto">
+                <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto items-center">
+                    
+                    {/* BOTÓN ALERTA RETIROS (ACCESO A INGRESOS) */}
+                    <button 
+                        onClick={() => onNavigate && onNavigate('retiros')}
+                        className="relative bg-white border border-slate-200 px-4 py-3 rounded-2xl shadow-sm hover:shadow-md hover:bg-slate-50 transition-all flex items-center gap-2 group min-w-[110px] justify-center"
+                        title="Ver equipos retirados por choferes"
+                    >
+                        <span className="text-xl">📥</span>
+                        <span className="font-bold text-sm text-slate-600 uppercase hidden sm:block">Retiros</span>
+                        
+                        {/* Badge Rojo de Alerta (Solo si hay > 0) */}
+                        {retirosPendientes > 0 && (
+                            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-black w-6 h-6 flex items-center justify-center rounded-full shadow-lg animate-bounce">
+                                {retirosPendientes}
+                            </span>
+                        )}
+                    </button>
+
+                    {/* Buscador Moderno */}
                     <div className="relative flex-1 min-w-[280px]">
                         <span className="absolute left-4 top-3.5 text-slate-400">🔍</span>
                         <input 
@@ -97,6 +132,7 @@ const ControlSoportes: React.FC = () => {
                         />
                     </div>
 
+                    {/* Selector de Estado */}
                     <div className="relative min-w-[200px]">
                         <span className="absolute left-4 top-3.5 text-slate-400">📂</span>
                         <select 
@@ -154,7 +190,6 @@ const ControlSoportes: React.FC = () => {
                                             <td className="p-5 text-center">
                                                 <div className="flex gap-2 justify-center items-center">
                                                     
-                                                    {/* 1. SELECTOR DE RANGO (Solo si es Resuelto) */}
                                                     {esResuelto && (
                                                         <select 
                                                             value={s.rangoEntrega || ""} 
@@ -166,7 +201,6 @@ const ControlSoportes: React.FC = () => {
                                                         </select>
                                                     )}
 
-                                                    {/* 2. BOTÓN DE ESTADO (DUAL) */}
                                                     <button 
                                                         onClick={() => toggleEstadoSoporte(s.id, s.estado)}
                                                         className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-colors shadow-sm flex items-center gap-1 ${
@@ -183,7 +217,6 @@ const ControlSoportes: React.FC = () => {
                                                         )}
                                                     </button>
                                                     
-                                                    {/* 3. BOTÓN ELIMINAR */}
                                                     <button 
                                                         onClick={() => eliminarSoporte(s.id)}
                                                         className="bg-red-50 text-red-500 border border-red-100 px-3 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-500 hover:text-white transition-colors shadow-sm"
