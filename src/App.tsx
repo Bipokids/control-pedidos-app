@@ -12,7 +12,7 @@ import Usuarios from './pages/Usuarios';
 import Estadisticas from './pages/Estadisticas';
 import SoportesRetirados from './pages/SoportesRetirados';
 import Pagos from './pages/Pagos';
-import Devoluciones from './pages/Devoluciones'; // <--- Importamos Devoluciones
+import Devoluciones from './pages/Devoluciones';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 interface NavButtonProps {
@@ -23,7 +23,6 @@ interface NavButtonProps {
   alertCount?: number;
 }
 
-// 🎨 COMPONENTE DE BOTÓN ACTUALIZADO CON ALERTA
 const NavButton: React.FC<NavButtonProps> = ({ active, onClick, icon, label, alertCount }) => (
   <button 
     onClick={onClick}
@@ -33,7 +32,6 @@ const NavButton: React.FC<NavButtonProps> = ({ active, onClick, icon, label, ale
         : 'text-slate-500 hover:bg-slate-800 hover:text-white'
     }`}
   >
-    {/* Globo de Alerta Roja */}
     {alertCount && alertCount > 0 ? (
       <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-black w-5 h-5 flex items-center justify-center rounded-full shadow-md animate-pulse z-10 border-2 border-slate-900">
         {alertCount}
@@ -50,11 +48,8 @@ const NavButton: React.FC<NavButtonProps> = ({ active, onClick, icon, label, ale
 const AppContent = () => {
   const { user, role, logout } = useAuth();
   const [paginaActual, setPaginaActual] = useState<string>('produccion');
-  
-  // Estado para la alerta de retiros
   const [retirosPendientes, setRetirosPendientes] = useState(0);
 
-  // 1. Escuchar Soportes Retirados para la alerta en el menú (Solo Admin)
   useEffect(() => {
     if (role !== 'admin') return;
 
@@ -71,7 +66,6 @@ const AppContent = () => {
     return () => unsubscribe();
   }, [role]);
 
-  // Lógica de títulos
   useEffect(() => {
     const nombres: Record<string, string> = {
       remitos: 'Logística',
@@ -80,7 +74,7 @@ const AppContent = () => {
       estadisticas: 'Dashboard',
       retiros: 'Soportes Retirados',
       pagos: 'Control Pagos',
-      devoluciones: 'Devoluciones', // <--- Titulo nuevo
+      devoluciones: 'Devoluciones',
       produccion: 'Producción',
       contador: 'Monitor',
       gestion_soportes: 'Taller',
@@ -91,15 +85,9 @@ const AppContent = () => {
     document.title = `${titulo} | Bipokids`;
   }, [paginaActual]);
 
-  // Seguridad: Redirección inicial según rol
   useEffect(() => {
-    // Si es admin entra a logística por defecto si estaba en producción
     if (role === 'admin' && paginaActual === 'produccion') setPaginaActual('remitos');
-    
-    // Si es vendedor entra a devoluciones por defecto
     if (role === 'vendedor' && paginaActual !== 'devoluciones') setPaginaActual('devoluciones');
-    
-    // Si es producción, lo mantenemos en producción (o contador/gestion)
     if (role === 'produccion' && !['produccion', 'contador', 'gestion_soportes'].includes(paginaActual)) {
         setPaginaActual('produccion');
     }
@@ -110,16 +98,13 @@ const AppContent = () => {
   return (
     <div className="flex min-h-screen bg-slate-50 font-sans">
       
-      {/* SIDEBAR DE NAVEGACIÓN */}
       <nav className="w-24 bg-slate-900 flex flex-col items-center py-6 gap-3 fixed h-full z-40 shadow-2xl border-r border-slate-800 overflow-y-auto scrollbar-hide">
         <div className="text-white font-black italic text-xl text-center mb-1 tracking-widest opacity-50">BK</div>
         
-        {/* 1. GRUPO ADMIN */}
+        {/* 1. GRUPO SUPERIOR (ADMIN) */}
         {role === 'admin' && (
           <>
             <NavButton active={paginaActual === 'remitos'} onClick={() => setPaginaActual('remitos')} icon="🚚" label="Logística" />
-            
-            {/* BOTÓN SOPORTES CON ALERTA */}
             <NavButton 
                 active={paginaActual === 'control_soportes' || paginaActual === 'retiros'} 
                 onClick={() => setPaginaActual('control_soportes')} 
@@ -127,27 +112,16 @@ const AppContent = () => {
                 label="Soportes"
                 alertCount={retirosPendientes} 
             />
-            
             <NavButton active={paginaActual === 'historial'} onClick={() => setPaginaActual('historial')} icon="🗂️" label="Despachos" />
             <NavButton active={paginaActual === 'pagos'} onClick={() => setPaginaActual('pagos')} icon="💰" label="Pagos" />
-            
-            <div className="w-10 h-[1px] bg-slate-800 my-1"></div>
+            <NavButton active={paginaActual === 'estadisticas'} onClick={() => setPaginaActual('estadisticas')} icon="📊" label="Métricas" />
           </>
-        )}
-
-        {/* 2. GRUPO DEVOLUCIONES (Admin + Vendedores) */}
-        {(role === 'admin' || role === 'vendedor') && (
-            <NavButton active={paginaActual === 'devoluciones'} onClick={() => setPaginaActual('devoluciones')} icon="↩️" label="Devoluc." />
-        )}
-
-        {role === 'admin' && (
-             <NavButton active={paginaActual === 'estadisticas'} onClick={() => setPaginaActual('estadisticas')} icon="📊" label="Métricas" />
         )}
 
         {/* Separador */}
         {(role === 'admin' || role === 'produccion') && <div className="w-10 h-[1px] bg-slate-800 my-1"></div>}
 
-        {/* 3. GRUPO OPERATIVO (Visible para todos menos vendedor puro) */}
+        {/* 2. GRUPO OPERATIVO (Todos menos vendedor puro) */}
         {role !== 'vendedor' && (
             <>
                 <NavButton active={paginaActual === 'contador'} onClick={() => setPaginaActual('contador')} icon="🔢" label="Contador" />
@@ -156,15 +130,23 @@ const AppContent = () => {
             </>
         )}
 
-        {/* 4. GRUPO SISTEMA */}
+        {/* 3. SOLO VENDEDOR (Acceso principal) */}
+        {role === 'vendedor' && (
+             <NavButton active={paginaActual === 'devoluciones'} onClick={() => setPaginaActual('devoluciones')} icon="↩️" label="Devoluc." />
+        )}
+
+        {/* 4. GRUPO INFERIOR (ADMIN) - Ubicación solicitada */}
         {role === 'admin' && (
            <>
              <div className="w-10 h-[1px] bg-slate-800 my-1"></div>
+             
+             {/* Devoluciones aquí para admin (sobre Usuarios) */}
+             <NavButton active={paginaActual === 'devoluciones'} onClick={() => setPaginaActual('devoluciones')} icon="↩️" label="Devoluc." />
+             
              <NavButton active={paginaActual === 'usuarios'} onClick={() => setPaginaActual('usuarios')} icon="👥" label="Usuarios" />
            </>
         )}
 
-        {/* 5. CERRAR SESIÓN */}
         <div className="mt-auto pb-4">
              <button onClick={logout} className="w-10 h-10 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors" title="Cerrar Sesión">
                 ✕
@@ -172,7 +154,6 @@ const AppContent = () => {
         </div>
       </nav>
 
-      {/* ÁREA DE CONTENIDO */}
       <main className="flex-1 ml-24 transition-all duration-300">
         
         {/* VISTAS ADMIN */}
