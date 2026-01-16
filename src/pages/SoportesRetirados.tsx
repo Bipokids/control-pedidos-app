@@ -10,7 +10,6 @@ const SoportesRetirados: React.FC = () => {
         const unsubscribe = onValue(ref(db_realtime, 'soportesypagos'), (snapshot) => {
             if (snapshot.exists()) {
                 const data = snapshot.val();
-                // Convertimos objeto a array y filtramos solo los de tipo "Soporte"
                 const lista = Object.entries(data)
                     .map(([id, val]: any) => ({ ...val, id }))
                     .filter((item: any) => item.tipo === "Soporte");
@@ -88,14 +87,25 @@ const SoportesRetirados: React.FC = () => {
                                     {reg.items && Array.isArray(reg.items) ? (
                                         reg.items.map((item: any, idx: number) => (
                                             <div key={idx} className="flex gap-3 items-start bg-slate-50 p-3 rounded-xl">
-                                                <div className="bg-white w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black text-slate-700 shadow-sm border border-slate-100">
+                                                <div className="bg-white w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black text-slate-700 shadow-sm border border-slate-100 shrink-0">
                                                     {item.cantidad}
                                                 </div>
-                                                <div className="flex-1">
+                                                <div className="flex-1 min-w-0"> {/* min-w-0 ayuda al flex a no desbordar */}
                                                     <p className="text-sm font-bold text-slate-800">{item.item}</p>
-                                                    <div className="flex gap-2 mt-1">
-                                                        {item.color && <span className="text-[10px] bg-white px-2 py-0.5 rounded border border-slate-100 text-slate-500 font-bold uppercase">{item.color}</span>}
-                                                        {item.detalle && <span className="text-[10px] text-slate-400 italic truncate max-w-[120px]">{item.detalle}</span>}
+                                                    
+                                                    {/* Color y Detalle */}
+                                                    <div className="flex flex-col gap-1 mt-1">
+                                                        {item.color && (
+                                                            <span className="text-[10px] bg-white px-2 py-0.5 rounded border border-slate-100 text-slate-500 font-bold uppercase w-fit">
+                                                                {item.color}
+                                                            </span>
+                                                        )}
+                                                        {/* AQUI EL CAMBIO: Permitir saltos de línea y ver todo el texto */}
+                                                        {item.detalle && (
+                                                            <p className="text-[11px] text-slate-500 italic leading-snug break-words bg-white/50 p-1.5 rounded-lg border border-slate-100/50">
+                                                                {item.detalle}
+                                                            </p>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>

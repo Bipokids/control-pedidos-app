@@ -7,7 +7,7 @@ const ControlDeRemitos: React.FC = () => {
     // ESTADOS DE DATOS
     const [remitos, setRemitos] = useState<Record<string, Remito>>({});
     const [soportes, setSoportes] = useState<Record<string, Soporte>>({});
-    const [despachos, setDespachos] = useState<any>({}); // <--- NUEVO ESTADO
+    const [despachos, setDespachos] = useState<any>({});
     const [tablaManual, setTablaManual] = useState<any>({});
     
     // ESTADOS DE INTERFAZ
@@ -41,38 +41,35 @@ const ControlDeRemitos: React.FC = () => {
     const rangos = ["Lunes Mañana", "Lunes Tarde", "Martes Mañana", "Martes Tarde", "Miércoles Mañana", "Miércoles Tarde", "Jueves Mañana", "Jueves Tarde", "Viernes Mañana", "Viernes Tarde"];
     const weekdays = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES"];
 
-    // 1. CARGA DE DATOS (AHORA INCLUYE DESPACHOS)
+    // 1. CARGA DE DATOS
     useEffect(() => {
         const unsubRemitos = onValue(ref(db_realtime, 'remitos'), (snapshot) => setRemitos(snapshot.val() || {}));
         const unsubSoportes = onValue(ref(db_realtime, 'soportes'), (snapshot) => setSoportes(snapshot.val() || {}));
-        const unsubDespachos = onValue(ref(db_realtime, 'despachos'), (snapshot) => setDespachos(snapshot.val() || {})); // <--- LEER DESPACHOS
+        const unsubDespachos = onValue(ref(db_realtime, 'despachos'), (snapshot) => setDespachos(snapshot.val() || {}));
         const unsubManual = onValue(ref(db_realtime, 'tablaManual'), (snapshot) => setTablaManual(snapshot.val() || {}));
 
         return () => { unsubRemitos(); unsubSoportes(); unsubDespachos(); unsubManual(); };
     }, []);
 
-    // 2. LÓGICA DE MAPEO DE CHOFERES (OPTIMIZACIÓN)
-    // Creamos un mapa: { "numeroRemito_o_ID": "NombreChofer" } para acceso instantáneo
-    const mapaChoferes = React.useMemo(() => {
-        const map: Record<string, string> = {};
+    // 2. LÓGICA DE DATOS DESPACHO (CHOFER + RECHAZOS + FIRMA)
+    const datosDespachoMap = React.useMemo(() => {
+        const map: Record<string, { chofer: string, itemsRechazados?: any[], clienteFirma?: any }> = {};
         if (!despachos) return map;
 
-        // Iterar fechas (YYYY-MM-DD)
         Object.values(despachos).forEach((itemsDia: any) => {
             if (!itemsDia) return;
-            // Iterar items dentro del día
             Object.values(itemsDia).forEach((d: any) => {
-                // Intentamos linkear por numeroRemito (si existe) o cliente como fallback
-                if (d.numeroRemito) map[d.numeroRemito] = d.chofer;
-                if (d.numeroSoporte) map[d.numeroSoporte] = d.chofer; // Para soportes
-                
-                // Opción robusta: Si guardas el ID original del remito en el despacho, usa ese ID.
-                // Si no, asumimos que coinciden por número.
+                const info = { 
+                    chofer: d.chofer, 
+                    itemsRechazados: d.itemsRechazados || [],
+                    clienteFirma: d.clienteFirma 
+                };
+                if (d.numeroRemito) map[d.numeroRemito] = info;
+                if (d.numeroSoporte) map[d.numeroSoporte] = info;
             });
         });
         return map;
     }, [despachos]);
-
 
     // 3. CÁLCULO DE CONTADORES
     const rPendientes = Object.values(remitos).filter(r => r.estadoPreparacion !== "Entregado").length;
@@ -109,33 +106,152 @@ const ControlDeRemitos: React.FC = () => {
         return matchTexto;
     });
 
-    // 5. ENTREGADOS (MEZCLA Y ASIGNACIÓN DE CHOFER)
+    // 5. ENTREGADOS (MEZCLA Y ASIGNACIÓN COMPLETA)
     const entregadosRemitos = Object.entries(remitos)
-        .filter(([_id, r]) => r.estadoPreparacion === "Entregado")
-        .map(([id, r]) => ({ 
-            ...r, 
-            id, 
-            _type: 'remito', 
-            displayNumero: r.numeroRemito,
-            // Aquí buscamos el chofer en el mapa usando el número de remito
-            chofer: mapaChoferes[r.numeroRemito] || 'Sin asignar' 
-        }));
+        // AHORA ACEPTAMOS AMBOS ESTADOS
+        .filter(([_id, r]) => r.estadoPreparacion === "Entregado" || r.estadoPreparacion === "Entregado Parcial")
+        .map(([id, r]) => {
+            // CORRECCIÓN AQUÍ: Agregamos "as any" al objeto vacío para evitar error TS2339
+            const info = datosDespachoMap[r.numeroRemito] || {} as any;
+            return { 
+                ...r, 
+                id, 
+                _type: 'remito', 
+                displayNumero: r.numeroRemito,
+                chofer: info.chofer || 'Sin asignar',
+                itemsRechazados: info.itemsRechazados,
+                clienteFirma: info.clienteFirma 
+            };
+        });
     
     const entregadosSoportes = Object.entries(soportes)
-        .filter(([_id, s]) => s.estado === "Entregado")
-        .map(([id, s]) => ({ 
-            ...s, 
-            id, 
-            _type: 'soporte', 
-            displayNumero: s.numeroSoporte, 
-            clienteFirma: (s as any).clienteFirma,
-            // Buscamos chofer para soporte
-            chofer: mapaChoferes[s.numeroSoporte] || 'Sin asignar'
-        }));
+        // AHORA ACEPTAMOS AMBOS ESTADOS
+        .filter(([_id, s]) => s.estado === "Entregado" || s.estado === "Entregado Parcial")
+        .map(([id, s]) => {
+            // CORRECCIÓN AQUÍ: Agregamos "as any" al objeto vacío
+            const info = datosDespachoMap[s.numeroSoporte] || {} as any;
+            return { 
+                ...s, 
+                id, 
+                _type: 'soporte', 
+                displayNumero: s.numeroSoporte, 
+                clienteFirma: info.clienteFirma, 
+                chofer: info.chofer || 'Sin asignar',
+                itemsRechazados: info.itemsRechazados
+            };
+        });
 
     const todosEntregados = [...entregadosRemitos, ...entregadosSoportes];
 
-    // ... (El resto de funciones eliminarItem, guardarDatos, etc. se mantienen igual) ...
+    // --- FUNCIÓN GENERAR IMAGEN COMPROBANTE (RECORTADA + TEXTO MANUAL) ---
+    const generarImagenComprobante = async () => {
+        if (!modalFirma.data) return;
+        const { clienteFirma, itemsRechazados } = modalFirma.data;
+        if (!clienteFirma?.firma) return alert("No hay firma disponible");
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        // --- 1. CONFIGURACIÓN DIMENSIONES ---
+        const width = 600;
+        let height = 220; // Altura base suficiente para firma + textos
+        const rechazos = itemsRechazados || [];
+        
+        if (rechazos.length > 0) {
+            height += 60 + (rechazos.length * 30);
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        // Fondo Blanco
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+
+        let currentY = 20; // Margen superior
+
+        // --- 2. DIBUJAR FIRMA (RECORTANDO EL TEXTO INFERIOR) ---
+        const img = new Image();
+        img.src = `data:image/png;base64,${clienteFirma.firma}`;
+        await new Promise((resolve) => { img.onload = resolve; });
+        
+        // Dimensiones de destino en el canvas
+        const destW = 200; 
+        const destH = 100;
+
+        // RECORTAR: Tomamos solo el 75% superior de la imagen fuente para eliminar el texto pequeño
+        const sourceH = img.height * 0.75; 
+
+        // drawImage(image, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight)
+        ctx.drawImage(
+            img, 
+            0, 0, img.width, sourceH, // Origen: Cortamos el 25% de abajo
+            (width - destW) / 2, currentY, destW, destH // Destino: Centrado
+        );
+        
+        currentY += destH + 10;
+
+        // --- 3. DIBUJAR NOMBRE Y DNI (TEXTO LIMPIO Y GRANDE) ---
+        ctx.fillStyle = '#000000';
+        ctx.font = 'bold 20px sans-serif'; // Un poco más grande para legibilidad
+        ctx.textAlign = 'center'; 
+        
+        ctx.fillText(`${clienteFirma.nombre}`, width / 2, currentY + 20);
+        
+        ctx.font = '16px sans-serif';
+        ctx.fillText(`DNI: ${clienteFirma.dni}`, width / 2, currentY + 45);
+        
+        currentY += 70; // Espacio antes de los rechazos
+
+        // --- 4. DIBUJAR ITEMS RECHAZADOS (SI EXISTEN) ---
+        if (rechazos.length > 0) {
+            // Icono y Título Rojo
+            ctx.font = 'bold 20px sans-serif'; 
+            const title = "ITEMS NO RECIBIDOS / RECHAZADOS";
+            const icon = "⚠️";
+            
+            // Medir para centrar
+            const iconWidth = ctx.measureText(icon).width;
+            const titleWidth = ctx.measureText(title).width;
+            const totalW = iconWidth + 10 + titleWidth;
+            let startX = (width - totalW) / 2;
+
+            // Dibujar
+            ctx.textAlign = 'left';
+            ctx.fillText(icon, startX, currentY);
+            
+            ctx.fillStyle = '#ef4444'; 
+            ctx.fillText(title, startX + iconWidth + 10, currentY);
+            
+            currentY += 35;
+
+            // Listado
+            ctx.fillStyle = '#b91c1c';
+            ctx.font = 'bold 16px monospace';
+            ctx.textAlign = 'center';
+            
+            rechazos.forEach((item: any) => {
+                ctx.fillText(`• ${item.codigo}: ${item.cantidadRechazada} un.`, width / 2, currentY);
+                currentY += 25;
+            });
+        }
+
+        // Copiar al portapapeles
+        canvas.toBlob(async (blob) => {
+            if (blob) {
+                try {
+                    await navigator.clipboard.write([
+                        new ClipboardItem({ 'image/png': blob })
+                    ]);
+                    alert("✅ Imagen copiada (Texto duplicado eliminado).");
+                } catch (e) {
+                    alert("❌ Error al copiar.");
+                }
+            }
+        });
+    };
+
     const eliminarItem = (id: string, type: string) => {
         if(window.confirm("¿Eliminar este registro entregado permanentemente?")) {
             const path = type === 'remito' ? 'remitos' : 'soportes';
@@ -144,64 +260,62 @@ const ControlDeRemitos: React.FC = () => {
     };
 
     const guardarDatos = async () => {
-       // ... (Lógica de guardado igual que antes) ...
-       if (!tipoCarga) return;
-       setLoading(true);
-       try {
-           if (tipoCarga === 'remito') {
-               // ... Procesamiento Remito ...
-               const numeroRemito = (datosRemitoRaw.match(/\b\d{4}-\d{8}\b/) || [""])[0];
-               const fechaEmision = (datosRemitoRaw.match(/\b\d{2}\/\d{2}\/\d{2,4}\b/) || [""])[0];
-               let cliente = "";
-               const lineasDatos = datosRemitoRaw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-               for (let i = 0; i < lineasDatos.length; i++) {
-                   if (/Raz[oó]n Social:/i.test(lineasDatos[i])) {
-                       cliente = lineasDatos[i].replace(/Raz[oó]n Social:/i, "").trim();
-                       if (!cliente && lineasDatos[i+1]) cliente = lineasDatos[i+1].trim();
-                       break;
-                   }
-                   if (!cliente && lineasDatos[i].length > 3 && !/^CUIT|Fecha|Tel|Domicilio/i.test(lineasDatos[i])) {
-                       cliente = lineasDatos[i];
-                   }
-               }
-               const articulos: any[] = [];
-               productosRaw.split(/\r?\n/).filter(Boolean).forEach(l => {
-                   const partes = l.trim().split(/\s+/);
-                   if (partes.length >= 2) {
-                       const cantidad = parseFloat(partes.shift()!.replace(",", "."));
-                       const codigo = partes.join(" ");
-                       if (codigo && !isNaN(cantidad)) articulos.push({ codigo, cantidad, detalle: "" });
-                   }
-               });
-               if (aclaracionesRaw) {
-                   const lineasAclara = aclaracionesRaw.split(/\r?\n|\/\//).map(l => l.trim()).filter(Boolean);
-                   lineasAclara.forEach(linea => {
-                       articulos.forEach(item => {
-                           const codNorm = item.codigo.replace(/\s+/g, "");
-                           if (linea.replace(/\s+/g, "").includes(codNorm)) {
-                               let detalleExtra = linea.replace(item.codigo, "").trim();
-                               if (detalleExtra) item.detalle = item.detalle ? item.detalle + " | " + detalleExtra : detalleExtra;
-                           }
-                       });
-                   });
-               }
-               await push(ref(db_realtime, 'remitos'), {
-                   numeroRemito, fechaEmision, cliente, articulos, aclaraciones: aclaracionesRaw,
-                   produccion: necesitaProduccion, esTransporte, estado: null, estadoPreparacion: "Pendiente",
-                   rangoDespacho: "", timestamp: new Date().toISOString()
-               });
-           } else {
-               await push(ref(db_realtime, 'soportes'), {
-                   numeroSoporte: soporteData.numero, cliente: soporteData.cliente,
-                   fechaSoporte: soporteData.fecha, productos: soporteData.productos.split('\n').filter(Boolean),
-                   estado: "Pendiente", timestamp: new Date().toISOString()
-               });
-           }
-           alert("✅ Guardado correctamente");
-           setSidebarOpen(false);
-           setDatosRemitoRaw(''); setProductosRaw(''); setAclaracionesRaw(''); setEsTransporte(false); setNecesitaProduccion(false);
-       } catch (e) { alert("❌ Error al guardar"); }
-       setLoading(false);
+        if (!tipoCarga) return;
+        setLoading(true);
+        try {
+            if (tipoCarga === 'remito') {
+                const numeroRemito = (datosRemitoRaw.match(/\b\d{4}-\d{8}\b/) || [""])[0];
+                const fechaEmision = (datosRemitoRaw.match(/\b\d{2}\/\d{2}\/\d{2,4}\b/) || [""])[0];
+                let cliente = "";
+                const lineasDatos = datosRemitoRaw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+                for (let i = 0; i < lineasDatos.length; i++) {
+                    if (/Raz[oó]n Social:/i.test(lineasDatos[i])) {
+                        cliente = lineasDatos[i].replace(/Raz[oó]n Social:/i, "").trim();
+                        if (!cliente && lineasDatos[i+1]) cliente = lineasDatos[i+1].trim();
+                        break;
+                    }
+                    if (!cliente && lineasDatos[i].length > 3 && !/^CUIT|Fecha|Tel|Domicilio/i.test(lineasDatos[i])) {
+                        cliente = lineasDatos[i];
+                    }
+                }
+                const articulos: any[] = [];
+                productosRaw.split(/\r?\n/).filter(Boolean).forEach(l => {
+                    const partes = l.trim().split(/\s+/);
+                    if (partes.length >= 2) {
+                        const cantidad = parseFloat(partes.shift()!.replace(",", "."));
+                        const codigo = partes.join(" ");
+                        if (codigo && !isNaN(cantidad)) articulos.push({ codigo, cantidad, detalle: "" });
+                    }
+                });
+                if (aclaracionesRaw) {
+                    const lineasAclara = aclaracionesRaw.split(/\r?\n|\/\//).map(l => l.trim()).filter(Boolean);
+                    lineasAclara.forEach(linea => {
+                        articulos.forEach(item => {
+                            const codNorm = item.codigo.replace(/\s+/g, "");
+                            if (linea.replace(/\s+/g, "").includes(codNorm)) {
+                                let detalleExtra = linea.replace(item.codigo, "").trim();
+                                if (detalleExtra) item.detalle = item.detalle ? item.detalle + " | " + detalleExtra : detalleExtra;
+                            }
+                        });
+                    });
+                }
+                await push(ref(db_realtime, 'remitos'), {
+                    numeroRemito, fechaEmision, cliente, articulos, aclaraciones: aclaracionesRaw,
+                    produccion: necesitaProduccion, esTransporte, estado: null, estadoPreparacion: "Pendiente",
+                    rangoDespacho: "", timestamp: new Date().toISOString()
+                });
+            } else {
+                await push(ref(db_realtime, 'soportes'), {
+                    numeroSoporte: soporteData.numero, cliente: soporteData.cliente,
+                    fechaSoporte: soporteData.fecha, productos: soporteData.productos.split('\n').filter(Boolean),
+                    estado: "Pendiente", timestamp: new Date().toISOString()
+                });
+            }
+            alert("✅ Guardado correctamente");
+            setSidebarOpen(false);
+            setDatosRemitoRaw(''); setProductosRaw(''); setAclaracionesRaw(''); setEsTransporte(false); setNecesitaProduccion(false);
+        } catch (e) { alert("❌ Error al guardar"); }
+        setLoading(false);
     };
 
     return (
@@ -412,8 +526,7 @@ const ControlDeRemitos: React.FC = () => {
             {/* BOTÓN FLOTANTE */}
             <button onClick={() => setSidebarOpen(true)} className="fixed bottom-10 right-10 w-16 h-16 bg-blue-600 text-white rounded-full shadow-2xl flex items-center justify-center text-3xl font-bold z-50 hover:scale-110 active:scale-95 transition-all">+</button>
 
-            {/* MODALS (Detalle y Firma) */}
-            {/* ... (Se mantienen igual que en la versión anterior, solo asegúrate de incluirlos) ... */}
+            {/* MODALS */}
             {modalDetalle.open && modalDetalle.data && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" onClick={() => setModalDetalle({ open: false, data: null })}>
                     <div className="bg-white rounded-[2rem] p-8 w-full max-w-lg shadow-2xl animate-in fade-in zoom-in duration-300" onClick={e => e.stopPropagation()}>
@@ -470,23 +583,52 @@ const ControlDeRemitos: React.FC = () => {
                 </div>
             )}
 
+            {/* MODAL FIRMA (ACTUALIZADO CON RECHAZOS Y COPY) */}
             {modalFirma.open && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" onClick={() => setModalFirma({...modalFirma, open: false})}>
                     <div className="bg-white rounded-[2rem] p-8 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
                         <h3 className="text-xl font-black text-slate-800 uppercase italic mb-4 text-center">Comprobante de Entrega</h3>
                         {modalFirma.data.clienteFirma ? (
                             <div className="space-y-4">
+                                {/* Datos Recibió */}
                                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-center">
                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Recibió</p>
                                     <p className="font-black text-slate-800 uppercase text-lg">{modalFirma.data.clienteFirma.nombre}</p>
                                     <p className="text-xs text-slate-500 font-bold">DNI: {modalFirma.data.clienteFirma.dni}</p>
                                 </div>
-                                <div className="border-2 border-dashed border-slate-200 rounded-2xl p-4 flex justify-center bg-white"><img src={`data:image/png;base64,${modalFirma.data.clienteFirma.firma}`} className="max-h-40 object-contain" alt="Firma" /></div>
+                                
+                                {/* Firma */}
+                                <div className="border-2 border-dashed border-slate-200 rounded-2xl p-4 flex justify-center bg-white">
+                                    <img src={`data:image/png;base64,${modalFirma.data.clienteFirma.firma}`} className="max-h-40 object-contain" alt="Firma" />
+                                </div>
+
+                                {/* LISTA DE RECHAZOS (NUEVO) */}
+                                {modalFirma.data.itemsRechazados && modalFirma.data.itemsRechazados.length > 0 && (
+                                    <div className="bg-red-50 p-4 rounded-2xl border border-red-100 text-center">
+                                        <p className="text-[10px] font-black text-red-400 uppercase tracking-widest mb-2 flex items-center justify-center gap-1">⚠️ Items No Recibidos</p>
+                                        <ul className="space-y-2">
+                                            {modalFirma.data.itemsRechazados.map((item: any, idx: number) => (
+                                                <li key={idx} className="text-xs font-bold text-red-700 flex justify-between border-b border-red-100 pb-1 last:border-0 last:pb-0">
+                                                    <span>{item.codigo}</span>
+                                                    <span>{item.cantidadRechazada} un.</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+
+                                {/* BOTÓN COPIAR IMAGEN (NUEVO) */}
+                                <button 
+                                    onClick={generarImagenComprobante}
+                                    className="w-full py-3 bg-indigo-50 text-indigo-600 rounded-xl font-black uppercase text-xs hover:bg-indigo-100 transition-colors flex items-center justify-center gap-2 border border-indigo-100"
+                                >
+                                    📋 Copiar como Imagen
+                                </button>
                             </div>
                         ) : (
                             <div className="p-10 text-center bg-slate-50 rounded-2xl text-slate-400 font-bold italic border border-slate-100"><p className="text-3xl mb-2">🤷‍♂️</p>Sin firma digital registrada.</div>
                         )}
-                        <button onClick={() => setModalFirma({...modalFirma, open: false})} className="w-full mt-6 p-4 bg-slate-900 text-white rounded-2xl font-black uppercase italic tracking-widest hover:bg-slate-800 transition-colors">Cerrar</button>
+                        <button onClick={() => setModalFirma({...modalFirma, open: false})} className="w-full mt-4 p-4 bg-slate-900 text-white rounded-2xl font-black uppercase italic tracking-widest hover:bg-slate-800 transition-colors">Cerrar</button>
                     </div>
                 </div>
             )}
@@ -496,6 +638,7 @@ const ControlDeRemitos: React.FC = () => {
                 <div className="fixed inset-0 z-[100] flex justify-end">
                     <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
                     <div className="relative w-full max-w-lg bg-white h-full shadow-2xl p-8 overflow-y-auto animate-in slide-in-from-right duration-300">
+                        {/* ... SIDEBAR CONTENT (Igual que antes) ... */}
                         <div className="flex justify-between items-center mb-8">
                             <h2 className="text-2xl font-black italic uppercase text-slate-800 tracking-tighter">Carga de Datos</h2>
                             <button onClick={() => setSidebarOpen(false)} className="text-slate-300 hover:text-slate-800 text-xl font-bold">✕</button>

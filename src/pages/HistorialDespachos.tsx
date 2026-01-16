@@ -16,6 +16,8 @@ interface DespachoItem {
     despacharConFaltante?: boolean;
     productosMap?: Record<string, number>; // Lo que se llevó
     esperadosMap?: Record<string, number>; // Lo que debía llevar
+    itemsRechazados?: { codigo: string; cantidadRechazada: number }[]; // Nuevo campo
+    estado?: string; // Nuevo campo (ej: Entregado Parcial)
     imagenUrl?: string;
 
     // Específico Soporte
@@ -55,11 +57,13 @@ const HistorialDespachos: React.FC = () => {
                             despacharConFaltante: item.despacharConFaltante,
                             productosMap: item.productos || {},
                             esperadosMap: item.productosEsperados || {},
+                            itemsRechazados: item.itemsRechazados || [], // Mapeamos rechazos
+                            estado: item.estado, // Mapeamos estado explícito
                             imagenUrl: item.imagenUrl
                         });
                     } else {
                         // Es Soporte
-                        // Normalizar productos que a veces vienen como objeto o array en firebase antiguo
+                        // Normalizar productos
                         let prods: string[] = [];
                         if (Array.isArray(item.productos)) prods = item.productos;
                         else if (typeof item.productos === 'string') prods = [item.productos];
@@ -107,8 +111,17 @@ const HistorialDespachos: React.FC = () => {
         }
     };
 
-    // --- LÓGICA DE ESTADO (Porteada de Kotlin) ---
+    // --- LÓGICA DE ESTADO ---
     const getEstadoRemito = (item: DespachoItem) => {
+        // Prioridad 1: Estado explícito que viene de la app del chofer
+        if (item.estado === "Entregado Parcial") {
+            return { texto: "⚠️ Entrega Parcial", color: "bg-red-100 text-red-700 border-red-200" };
+        }
+        if (item.estado === "Rechazado") {
+            return { texto: "❌ Rechazado Total", color: "bg-red-200 text-red-800 border-red-300" };
+        }
+
+        // Prioridad 2: Cálculo manual (Legacy o fallback)
         if (!item.esperadosMap) return { texto: "📦 Despachado", color: "bg-blue-100 text-blue-700" };
 
         let hayFaltantes = false;
@@ -119,6 +132,7 @@ const HistorialDespachos: React.FC = () => {
 
         if (!hayFaltantes) return { texto: "✅ Entregado Completo", color: "bg-green-100 text-green-700 border-green-200" };
         if (item.despacharConFaltante) return { texto: "⚠️ Con Faltantes (Autorizado)", color: "bg-yellow-100 text-yellow-700 border-yellow-200" };
+        
         return { texto: "📦 Despachado", color: "bg-blue-100 text-blue-700 border-blue-200" };
     };
 
@@ -216,9 +230,9 @@ const HistorialDespachos: React.FC = () => {
                                                         <p>📋 <b>Control:</b> {item.responsable || '-'}</p>
                                                     </div>
 
-                                                    {/* Productos Remito */}
+                                                    {/* Productos Entregados */}
                                                     <div className="text-xs border-t border-slate-100 pt-2">
-                                                        <p className="font-bold text-slate-400 uppercase text-[9px] mb-1">Productos:</p>
+                                                        <p className="font-bold text-slate-400 uppercase text-[9px] mb-1">Entregado:</p>
                                                         <ul className="grid grid-cols-2 gap-x-2">
                                                             {Object.entries(item.productosMap || {}).map(([prod, cant]) => (
                                                                 <li key={prod} className="text-slate-600">
@@ -227,6 +241,21 @@ const HistorialDespachos: React.FC = () => {
                                                             ))}
                                                         </ul>
                                                     </div>
+
+                                                    {/* Items Rechazados (SI EXISTEN) */}
+                                                    {item.itemsRechazados && item.itemsRechazados.length > 0 && (
+                                                        <div className="text-xs mt-3 bg-red-50 p-2 rounded-lg border border-red-100">
+                                                            <p className="font-black text-red-400 uppercase text-[9px] mb-1">❌ No Recibido / Rechazado:</p>
+                                                            <ul className="space-y-1">
+                                                                {item.itemsRechazados.map((rechazo, idx) => (
+                                                                    <li key={idx} className="text-red-700 font-bold flex justify-between">
+                                                                        <span>{rechazo.codigo}</span>
+                                                                        <span>{rechazo.cantidadRechazada} un.</span>
+                                                                    </li>
+                                                                ))}
+                                                            </ul>
+                                                        </div>
+                                                    )}
                                                 </>
                                             ) : (
                                                 /* ------ TIPO: SOPORTE ------ */
