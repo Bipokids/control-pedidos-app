@@ -52,6 +52,7 @@ const ControlDeRemitos: React.FC = () => {
     }, []);
 
     // 2. LÓGICA DE DATOS DESPACHO (CHOFER + RECHAZOS + FIRMA)
+    // CORRECCIÓN: Indexamos por ID (remitoId/soporteId) y por NÚMERO para asegurar match
     const datosDespachoMap = React.useMemo(() => {
         const map: Record<string, { chofer: string, itemsRechazados?: any[], clienteFirma?: any }> = {};
         if (!despachos) return map;
@@ -64,8 +65,14 @@ const ControlDeRemitos: React.FC = () => {
                     itemsRechazados: d.itemsRechazados || [],
                     clienteFirma: d.clienteFirma 
                 };
-                if (d.numeroRemito) map[d.numeroRemito] = info;
-                if (d.numeroSoporte) map[d.numeroSoporte] = info;
+                
+                // Mapeo por ID único (Prioridad Alta - Viene de la App Android)
+                if (d.remitoId) map[d.remitoId] = info;
+                if (d.soporteId) map[d.soporteId] = info;
+
+                // Mapeo por Número Visible (Fallback)
+                if (d.numeroRemito) map[String(d.numeroRemito)] = info;
+                if (d.numeroSoporte) map[String(d.numeroSoporte)] = info;
             });
         });
         return map;
@@ -108,11 +115,10 @@ const ControlDeRemitos: React.FC = () => {
 
     // 5. ENTREGADOS (MEZCLA Y ASIGNACIÓN COMPLETA)
     const entregadosRemitos = Object.entries(remitos)
-        // AHORA ACEPTAMOS AMBOS ESTADOS
         .filter(([_id, r]) => r.estadoPreparacion === "Entregado" || r.estadoPreparacion === "Entregado Parcial")
         .map(([id, r]) => {
-            // CORRECCIÓN AQUÍ: Agregamos "as any" al objeto vacío para evitar error TS2339
-            const info = datosDespachoMap[r.numeroRemito] || {} as any;
+            // Buscamos primero por ID, luego por número
+            const info = datosDespachoMap[id] || datosDespachoMap[String(r.numeroRemito)] || {} as any;
             return { 
                 ...r, 
                 id, 
@@ -125,17 +131,17 @@ const ControlDeRemitos: React.FC = () => {
         });
     
     const entregadosSoportes = Object.entries(soportes)
-        // AHORA ACEPTAMOS AMBOS ESTADOS
         .filter(([_id, s]) => s.estado === "Entregado" || s.estado === "Entregado Parcial")
         .map(([id, s]) => {
-            // CORRECCIÓN AQUÍ: Agregamos "as any" al objeto vacío
-            const info = datosDespachoMap[s.numeroSoporte] || {} as any;
+            // Buscamos primero por ID (soporteId = id), luego por número
+            const info = datosDespachoMap[id] || datosDespachoMap[String(s.numeroSoporte)] || {} as any;
             return { 
                 ...s, 
                 id, 
                 _type: 'soporte', 
                 displayNumero: s.numeroSoporte, 
-                clienteFirma: info.clienteFirma, 
+                // Usamos la firma del despacho (nueva) o fallback a la vieja si existiera
+                clienteFirma: info.clienteFirma || (s as any).clienteFirma, 
                 chofer: info.chofer || 'Sin asignar',
                 itemsRechazados: info.itemsRechazados
             };
@@ -146,7 +152,9 @@ const ControlDeRemitos: React.FC = () => {
     // --- FUNCIÓN GENERAR IMAGEN COMPROBANTE (RECORTADA + TEXTO MANUAL) ---
     const generarImagenComprobante = async () => {
         if (!modalFirma.data) return;
-        const { clienteFirma, itemsRechazados } = modalFirma.data;
+        // Obtenemos _type para saber si mostrar rechazos o no (Soportes no llevan rechazos)
+        const { clienteFirma, itemsRechazados, _type } = modalFirma.data;
+        
         if (!clienteFirma?.firma) return alert("No hay firma disponible");
 
         const canvas = document.createElement('canvas');
@@ -155,8 +163,10 @@ const ControlDeRemitos: React.FC = () => {
 
         // --- 1. CONFIGURACIÓN DIMENSIONES ---
         const width = 600;
-        let height = 220; // Altura base suficiente para firma + textos
-        const rechazos = itemsRechazados || [];
+        let height = 220; 
+        
+        // Solo mostramos rechazos si es REMITO y tiene items
+        const rechazos = (_type === 'remito' && itemsRechazados) ? itemsRechazados : [];
         
         if (rechazos.length > 0) {
             height += 60 + (rechazos.length * 30);
@@ -169,32 +179,28 @@ const ControlDeRemitos: React.FC = () => {
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, width, height);
 
-        let currentY = 20; // Margen superior
+        let currentY = 20;
 
         // --- 2. DIBUJAR FIRMA (RECORTANDO EL TEXTO INFERIOR) ---
         const img = new Image();
         img.src = `data:image/png;base64,${clienteFirma.firma}`;
         await new Promise((resolve) => { img.onload = resolve; });
         
-        // Dimensiones de destino en el canvas
         const destW = 200; 
         const destH = 100;
-
-        // RECORTAR: Tomamos solo el 75% superior de la imagen fuente para eliminar el texto pequeño
         const sourceH = img.height * 0.75; 
 
-        // drawImage(image, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight)
         ctx.drawImage(
             img, 
-            0, 0, img.width, sourceH, // Origen: Cortamos el 25% de abajo
-            (width - destW) / 2, currentY, destW, destH // Destino: Centrado
+            0, 0, img.width, sourceH, 
+            (width - destW) / 2, currentY, destW, destH 
         );
         
         currentY += destH + 10;
 
-        // --- 3. DIBUJAR NOMBRE Y DNI (TEXTO LIMPIO Y GRANDE) ---
+        // --- 3. DIBUJAR NOMBRE Y DNI ---
         ctx.fillStyle = '#000000';
-        ctx.font = 'bold 20px sans-serif'; // Un poco más grande para legibilidad
+        ctx.font = 'bold 20px sans-serif'; 
         ctx.textAlign = 'center'; 
         
         ctx.fillText(`${clienteFirma.nombre}`, width / 2, currentY + 20);
@@ -202,22 +208,19 @@ const ControlDeRemitos: React.FC = () => {
         ctx.font = '16px sans-serif';
         ctx.fillText(`DNI: ${clienteFirma.dni}`, width / 2, currentY + 45);
         
-        currentY += 70; // Espacio antes de los rechazos
+        currentY += 70; 
 
-        // --- 4. DIBUJAR ITEMS RECHAZADOS (SI EXISTEN) ---
+        // --- 4. DIBUJAR RECHAZOS (SOLO SI APLICA) ---
         if (rechazos.length > 0) {
-            // Icono y Título Rojo
             ctx.font = 'bold 20px sans-serif'; 
             const title = "ITEMS NO RECIBIDOS / RECHAZADOS";
             const icon = "⚠️";
             
-            // Medir para centrar
             const iconWidth = ctx.measureText(icon).width;
             const titleWidth = ctx.measureText(title).width;
             const totalW = iconWidth + 10 + titleWidth;
             let startX = (width - totalW) / 2;
 
-            // Dibujar
             ctx.textAlign = 'left';
             ctx.fillText(icon, startX, currentY);
             
@@ -226,7 +229,6 @@ const ControlDeRemitos: React.FC = () => {
             
             currentY += 35;
 
-            // Listado
             ctx.fillStyle = '#b91c1c';
             ctx.font = 'bold 16px monospace';
             ctx.textAlign = 'center';
@@ -237,14 +239,13 @@ const ControlDeRemitos: React.FC = () => {
             });
         }
 
-        // Copiar al portapapeles
         canvas.toBlob(async (blob) => {
             if (blob) {
                 try {
                     await navigator.clipboard.write([
                         new ClipboardItem({ 'image/png': blob })
                     ]);
-                    alert("✅ Imagen copiada (Texto duplicado eliminado).");
+                    alert("✅ Imagen copiada.");
                 } catch (e) {
                     alert("❌ Error al copiar.");
                 }
