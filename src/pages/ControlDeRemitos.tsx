@@ -15,8 +15,14 @@ const ControlDeRemitos: React.FC = () => {
     const [filtroRapido, setFiltroRapido] = useState<'sin_fecha' | 'produccion' | 'listos' | null>(null);
 
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    
+    // Modals existentes
     const [modalFirma, setModalFirma] = useState<{ open: boolean, data: any, type: 'remito' | 'soporte' }>({ open: false, data: null, type: 'remito' });
     const [modalDetalle, setModalDetalle] = useState<{ open: boolean, data: any | null }>({ open: false, data: null });
+    
+    // --- NUEVO: Modal para WhatsApp ---
+    const [modalWhatsapp, setModalWhatsapp] = useState<{ open: boolean, remito: any, nuevoRango: string } | null>(null);
+
     const [tablaExpandida, setTablaExpandida] = useState(true);
 
     // ESTADOS SIDEBAR (FORMULARIOS)
@@ -34,6 +40,7 @@ const ControlDeRemitos: React.FC = () => {
     const [soporteData, setSoporteData] = useState({
         numero: '',
         cliente: '',
+        telefono: '', // <--- AGREGAR ESTO
         fecha: new Date().toISOString().split('T')[0],
         productos: ''
     });
@@ -51,8 +58,7 @@ const ControlDeRemitos: React.FC = () => {
         return () => { unsubRemitos(); unsubSoportes(); unsubDespachos(); unsubManual(); };
     }, []);
 
-    // 2. LÓGICA DE DATOS DESPACHO (CHOFER + RECHAZOS + FIRMA)
-    // CORRECCIÓN: Indexamos por ID (remitoId/soporteId) y por NÚMERO para asegurar match
+    // 2. LÓGICA DE DATOS DESPACHO
     const datosDespachoMap = React.useMemo(() => {
         const map: Record<string, { chofer: string, itemsRechazados?: any[], clienteFirma?: any }> = {};
         if (!despachos) return map;
@@ -65,12 +71,8 @@ const ControlDeRemitos: React.FC = () => {
                     itemsRechazados: d.itemsRechazados || [],
                     clienteFirma: d.clienteFirma 
                 };
-                
-                // Mapeo por ID único (Prioridad Alta - Viene de la App Android)
                 if (d.remitoId) map[d.remitoId] = info;
                 if (d.soporteId) map[d.soporteId] = info;
-
-                // Mapeo por Número Visible (Fallback)
                 if (d.numeroRemito) map[String(d.numeroRemito)] = info;
                 if (d.numeroSoporte) map[String(d.numeroSoporte)] = info;
             });
@@ -113,11 +115,10 @@ const ControlDeRemitos: React.FC = () => {
         return matchTexto;
     });
 
-    // 5. ENTREGADOS (MEZCLA Y ASIGNACIÓN COMPLETA)
+    // 5. ENTREGADOS
     const entregadosRemitos = Object.entries(remitos)
         .filter(([_id, r]) => r.estadoPreparacion === "Entregado" || r.estadoPreparacion === "Entregado Parcial")
         .map(([id, r]) => {
-            // Buscamos primero por ID, luego por número
             const info = datosDespachoMap[id] || datosDespachoMap[String(r.numeroRemito)] || {} as any;
             return { 
                 ...r, 
@@ -133,14 +134,12 @@ const ControlDeRemitos: React.FC = () => {
     const entregadosSoportes = Object.entries(soportes)
         .filter(([_id, s]) => s.estado === "Entregado" || s.estado === "Entregado Parcial")
         .map(([id, s]) => {
-            // Buscamos primero por ID (soporteId = id), luego por número
             const info = datosDespachoMap[id] || datosDespachoMap[String(s.numeroSoporte)] || {} as any;
             return { 
                 ...s, 
                 id, 
                 _type: 'soporte', 
                 displayNumero: s.numeroSoporte, 
-                // Usamos la firma del despacho (nueva) o fallback a la vieja si existiera
                 clienteFirma: info.clienteFirma || (s as any).clienteFirma, 
                 chofer: info.chofer || 'Sin asignar',
                 itemsRechazados: info.itemsRechazados
@@ -149,39 +148,30 @@ const ControlDeRemitos: React.FC = () => {
 
     const todosEntregados = [...entregadosRemitos, ...entregadosSoportes];
 
-    // --- FUNCIÓN GENERAR IMAGEN COMPROBANTE (RECORTADA + TEXTO MANUAL) ---
+    // --- FUNCIÓN IMAGEN COMPROBANTE ---
     const generarImagenComprobante = async () => {
         if (!modalFirma.data) return;
-        // Obtenemos _type para saber si mostrar rechazos o no (Soportes no llevan rechazos)
         const { clienteFirma, itemsRechazados, _type } = modalFirma.data;
-        
         if (!clienteFirma?.firma) return alert("No hay firma disponible");
 
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        // --- 1. CONFIGURACIÓN DIMENSIONES ---
         const width = 600;
         let height = 220; 
         
-        // Solo mostramos rechazos si es REMITO y tiene items
         const rechazos = (_type === 'remito' && itemsRechazados) ? itemsRechazados : [];
-        
-        if (rechazos.length > 0) {
-            height += 60 + (rechazos.length * 30);
-        }
+        if (rechazos.length > 0) height += 60 + (rechazos.length * 30);
 
         canvas.width = width;
         canvas.height = height;
 
-        // Fondo Blanco
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, width, height);
 
         let currentY = 20;
 
-        // --- 2. DIBUJAR FIRMA (RECORTANDO EL TEXTO INFERIOR) ---
         const img = new Image();
         img.src = `data:image/png;base64,${clienteFirma.firma}`;
         await new Promise((resolve) => { img.onload = resolve; });
@@ -190,32 +180,21 @@ const ControlDeRemitos: React.FC = () => {
         const destH = 100;
         const sourceH = img.height * 0.75; 
 
-        ctx.drawImage(
-            img, 
-            0, 0, img.width, sourceH, 
-            (width - destW) / 2, currentY, destW, destH 
-        );
-        
+        ctx.drawImage(img, 0, 0, img.width, sourceH, (width - destW) / 2, currentY, destW, destH);
         currentY += destH + 10;
 
-        // --- 3. DIBUJAR NOMBRE Y DNI ---
         ctx.fillStyle = '#000000';
         ctx.font = 'bold 20px sans-serif'; 
         ctx.textAlign = 'center'; 
-        
         ctx.fillText(`${clienteFirma.nombre}`, width / 2, currentY + 20);
-        
         ctx.font = '16px sans-serif';
         ctx.fillText(`DNI: ${clienteFirma.dni}`, width / 2, currentY + 45);
-        
         currentY += 70; 
 
-        // --- 4. DIBUJAR RECHAZOS (SOLO SI APLICA) ---
         if (rechazos.length > 0) {
             ctx.font = 'bold 20px sans-serif'; 
             const title = "ITEMS NO RECIBIDOS / RECHAZADOS";
             const icon = "⚠️";
-            
             const iconWidth = ctx.measureText(icon).width;
             const titleWidth = ctx.measureText(title).width;
             const totalW = iconWidth + 10 + titleWidth;
@@ -223,16 +202,13 @@ const ControlDeRemitos: React.FC = () => {
 
             ctx.textAlign = 'left';
             ctx.fillText(icon, startX, currentY);
-            
             ctx.fillStyle = '#ef4444'; 
             ctx.fillText(title, startX + iconWidth + 10, currentY);
-            
             currentY += 35;
 
             ctx.fillStyle = '#b91c1c';
             ctx.font = 'bold 16px monospace';
             ctx.textAlign = 'center';
-            
             rechazos.forEach((item: any) => {
                 ctx.fillText(`• ${item.codigo}: ${item.cantidadRechazada} un.`, width / 2, currentY);
                 currentY += 25;
@@ -242,13 +218,9 @@ const ControlDeRemitos: React.FC = () => {
         canvas.toBlob(async (blob) => {
             if (blob) {
                 try {
-                    await navigator.clipboard.write([
-                        new ClipboardItem({ 'image/png': blob })
-                    ]);
+                    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
                     alert("✅ Imagen copiada.");
-                } catch (e) {
-                    alert("❌ Error al copiar.");
-                }
+                } catch (e) { alert("❌ Error al copiar."); }
             }
         });
     };
@@ -260,6 +232,79 @@ const ControlDeRemitos: React.FC = () => {
         }
     };
 
+    // --- NUEVO: Manejo de Cambio de Rango (Intercepción para WhatsApp) ---
+    const handleRangoChange = (remitoId: string, remitoData: any, nuevoRango: string) => {
+        // Si borra el rango, actualizamos directo
+        if (nuevoRango === "") {
+            update(ref(db_realtime, `remitos/${remitoId}`), { rangoDespacho: "" });
+            return;
+        }
+
+        // Si tiene teléfono guardado, abrimos el modal de decisión
+        if (remitoData.telefono) {
+            setModalWhatsapp({ open: true, remito: { ...remitoData, id: remitoId }, nuevoRango });
+        } else {
+            // Si no tiene teléfono, actualizamos directo
+            update(ref(db_realtime, `remitos/${remitoId}`), { rangoDespacho: nuevoRango });
+        }
+    };
+
+    // --- CONFIRMAR ASIGNACIÓN (ACTUALIZADO CON FORMATO PRO Y VERBO DINÁMICO) ---
+    const confirmarAsignacion = (enviarWhatsapp: boolean) => {
+        if (!modalWhatsapp) return;
+        const { remito, nuevoRango } = modalWhatsapp;
+
+        // 1. Actualizar Rango en Firebase
+        update(ref(db_realtime, `remitos/${remito.id}`), { rangoDespacho: nuevoRango });
+
+        // 2. Si eligió enviar WhatsApp
+        if (enviarWhatsapp) {
+            const telefonoStr = remito.telefono ? String(remito.telefono) : "";
+            const telefonoLimpio = telefonoStr.replace(/\D/g, ''); 
+            
+            if (telefonoLimpio) {
+                // Agregar 549 para Argentina
+                const telefonoFull = telefonoLimpio.startsWith("54") ? telefonoLimpio : `549${telefonoLimpio}`;
+
+                // --- A. LÓGICA DE FECHA AMIGABLE ---
+                let rangoAmigable = nuevoRango;
+                const partesRango = nuevoRango.split(" ");
+                if (partesRango.length === 2) {
+                    const [dia, turno] = partesRango;
+                    if (turno === "Mañana") rangoAmigable = `${dia} por la mañana`;
+                    else if (turno === "Tarde") rangoAmigable = `${dia} por la tarde`;
+                }
+
+                // --- B. LÓGICA DE VERBO (TRANSPORTE VS ENTREGA) ---
+                // Si esTransporte es true -> "despachando", sino -> "entregando"
+                const verboAccion = remito.esTransporte ? "despachando" : "entregando";
+
+                // --- C. LISTA VERTICAL DE ITEMS ---
+                const itemsLista = Array.isArray(remito.articulos) 
+                    ? remito.articulos.map((a: any) => `• ${a.cantidad}x ${a.codigo}`).join('\n')
+                    : "• Varios productos";
+
+                // --- D. CONSTRUCCIÓN DEL MENSAJE ---
+                const mensaje = `Hola *${remito.cliente}*. 👋
+                
+Nos comunicamos para informarte que el día *${rangoAmigable}* estaremos ${verboAccion} tu pedido número *${remito.numeroRemito}*.
+
+📋 *Detalle del pedido:*
+${itemsLista}
+
+Saludos, *BIPOKIDS*.`;
+                
+                const url = `https://web.whatsapp.com/send?phone=${telefonoFull}&text=${encodeURIComponent(mensaje)}`;
+                window.open(url, '_blank');
+            } else {
+                alert("Error: El teléfono no tiene un formato válido.");
+            }
+        }
+
+        setModalWhatsapp(null);
+    };
+
+    // --- PARSER CORREGIDO (Detecta Teléfono vs DNI) ---
     const guardarDatos = async () => {
         if (!tipoCarga) return;
         setLoading(true);
@@ -268,17 +313,52 @@ const ControlDeRemitos: React.FC = () => {
                 const numeroRemito = (datosRemitoRaw.match(/\b\d{4}-\d{8}\b/) || [""])[0];
                 const fechaEmision = (datosRemitoRaw.match(/\b\d{2}\/\d{2}\/\d{2,4}\b/) || [""])[0];
                 let cliente = "";
+                let telefono = ""; 
+
+                // ... dentro de guardarDatos, después de definir las variables ...
+
                 const lineasDatos = datosRemitoRaw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+                
+                const matchCelular = datosRemitoRaw.match(/\b(?:11|15)\d{8}\b/);
+                
+                if (matchCelular) {
+                    telefono = matchCelular[0]; // ¡Encontrado 1164611408!
+                }
+
+                // --- BUCLE DE PARSEO (SOLO SI NO ENCONTRAMOS CELULAR ARRIBA) ---
                 for (let i = 0; i < lineasDatos.length; i++) {
-                    if (/Raz[oó]n Social:/i.test(lineasDatos[i])) {
-                        cliente = lineasDatos[i].replace(/Raz[oó]n Social:/i, "").trim();
+                    const linea = lineasDatos[i];
+
+                    // Buscar Cliente
+                    if (/Raz[oó]n Social:/i.test(linea)) {
+                        cliente = linea.replace(/Raz[oó]n Social:/i, "").trim();
                         if (!cliente && lineasDatos[i+1]) cliente = lineasDatos[i+1].trim();
-                        break;
                     }
-                    if (!cliente && lineasDatos[i].length > 3 && !/^CUIT|Fecha|Tel|Domicilio/i.test(lineasDatos[i])) {
-                        cliente = lineasDatos[i];
+                    else if (!cliente && linea.length > 3 && !/^CUIT|Fecha|Tel|Domicilio|Vendedor|Condici|DNI/i.test(linea)) {
+                        cliente = linea;
+                    }
+
+                    // ESTRATEGIA 2: BÚSQUEDA SECUENCIAL (FALLBACK)
+                    // Solo entra aquí si la Estrategia 1 falló (ej: es un teléfono fijo o formato raro)
+                    if (!telefono && /(Tel[eé]fono|Celular|M[óo]vil|Tel)[:\.]?/i.test(linea)) {
+                        let posibleNumero = linea.replace(/(Tel[eé]fono|Celular|M[óo]vil|Tel)[:\.]?/i, "").trim();
+                        
+                        // Si la línea está vacía, miramos la siguiente
+                        if (!posibleNumero && lineasDatos[i+1]) {
+                             // Evitamos explícitamente el DNI si está justo abajo
+                             if (!lineasDatos[i+1].includes("30775261") && !/^DNI/i.test(lineasDatos[i+1])) {
+                                 posibleNumero = lineasDatos[i+1];
+                             }
+                        }
+
+                        const soloNumeros = posibleNumero.replace(/\D/g, '');
+                        // Filtramos DNI por longitud (el DNI es 8, el celular es 10)
+                        if (soloNumeros.length > 8) { 
+                            telefono = soloNumeros;
+                        }
                     }
                 }
+
                 const articulos: any[] = [];
                 productosRaw.split(/\r?\n/).filter(Boolean).forEach(l => {
                     const partes = l.trim().split(/\s+/);
@@ -288,6 +368,7 @@ const ControlDeRemitos: React.FC = () => {
                         if (codigo && !isNaN(cantidad)) articulos.push({ codigo, cantidad, detalle: "" });
                     }
                 });
+                
                 if (aclaracionesRaw) {
                     const lineasAclara = aclaracionesRaw.split(/\r?\n|\/\//).map(l => l.trim()).filter(Boolean);
                     lineasAclara.forEach(linea => {
@@ -300,16 +381,23 @@ const ControlDeRemitos: React.FC = () => {
                         });
                     });
                 }
+
                 await push(ref(db_realtime, 'remitos'), {
-                    numeroRemito, fechaEmision, cliente, articulos, aclaraciones: aclaracionesRaw,
+                    numeroRemito, fechaEmision, cliente, 
+                    telefono, 
+                    articulos, aclaraciones: aclaracionesRaw,
                     produccion: necesitaProduccion, esTransporte, estado: null, estadoPreparacion: "Pendiente",
                     rangoDespacho: "", timestamp: new Date().toISOString()
                 });
             } else {
                 await push(ref(db_realtime, 'soportes'), {
-                    numeroSoporte: soporteData.numero, cliente: soporteData.cliente,
-                    fechaSoporte: soporteData.fecha, productos: soporteData.productos.split('\n').filter(Boolean),
-                    estado: "Pendiente", timestamp: new Date().toISOString()
+                    numeroSoporte: soporteData.numero, 
+                    cliente: soporteData.cliente,
+                    telefono: soporteData.telefono, // <--- AGREGAR ESTO
+                    fechaSoporte: soporteData.fecha, 
+                    productos: soporteData.productos.split('\n').filter(Boolean),
+                    estado: "Pendiente", 
+                    timestamp: new Date().toISOString()
                 });
             }
             alert("✅ Guardado correctamente");
@@ -432,13 +520,18 @@ const ControlDeRemitos: React.FC = () => {
                                     return (
                                         <tr key={id} className={`hover:bg-slate-200 transition-colors text-[11px] font-bold ${bgClass} ${borderClass}`}>
                                             <td className="p-5 font-mono cursor-pointer hover:text-blue-600 hover:underline" onClick={() => setModalDetalle({ open: true, data: r })} title="Ver detalle">#{r.numeroRemito}</td>
-                                            <td className="p-5 uppercase">{r.cliente}</td>
+                                            <td className="p-5 uppercase">
+                                                {r.cliente}
+                                                {/* Indicador visual de que tiene teléfono */}
+                                                {(r as any).telefono && <span className="ml-1 text-[8px] bg-green-100 text-green-600 px-1 rounded border border-green-200">📞</span>}
+                                            </td>
                                             <td className="p-5 text-center"><input type="checkbox" checked={r.produccion} onChange={(e) => update(ref(db_realtime, `remitos/${id}`), { produccion: e.target.checked })} className="w-4 h-4 rounded border-slate-300 text-blue-600" /></td>
                                             <td className="p-5 text-center">{r.produccion && <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase shadow-sm ${r.estado === 'Listo' ? 'bg-green-500 text-white' : 'bg-yellow-200 text-yellow-800'}`}>{r.estado || 'PENDIENTE'}</span>}</td>
                                             <td className="p-5 text-center"><span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase shadow-sm bg-white/50 border border-slate-200`}>{r.estadoPreparacion || 'PENDIENTE'}</span></td>
                                             <td className="p-5 text-center"><button onClick={() => update(ref(db_realtime, `remitos/${id}`), { prioridad: !r.prioridad })} className={`text-lg transition-transform active:scale-90 ${r.prioridad ? 'grayscale-0' : 'grayscale opacity-20'}`}>🔥</button></td>
                                             <td className="p-5 text-center">
-                                                <select value={r.rangoDespacho || ""} onChange={(e) => update(ref(db_realtime, `remitos/${id}`), { rangoDespacho: e.target.value })} className="bg-white/50 border border-slate-300 rounded-xl p-2 text-[10px] font-black uppercase outline-none focus:bg-white">
+                                                {/* ACTUALIZADO: Usamos handleRangoChange en lugar de update directo */}
+                                                <select value={r.rangoDespacho || ""} onChange={(e) => handleRangoChange(id, r, e.target.value)} className="bg-white/50 border border-slate-300 rounded-xl p-2 text-[10px] font-black uppercase outline-none focus:bg-white">
                                                     <option value="">-- SELECCIONAR --</option>
                                                     {rangos.map(rng => <option key={rng} value={rng}>{rng}</option>)}
                                                 </select>
@@ -539,6 +632,10 @@ const ControlDeRemitos: React.FC = () => {
                                 ) : (
                                     <p className="text-orange-600 font-mono font-bold text-sm bg-orange-50 inline-block px-2 py-1 rounded-lg mt-1">Soporte #{modalDetalle.data.numeroSoporte}</p>
                                 )}
+                                {/* Mostrar teléfono en detalle si existe */}
+                                {(modalDetalle.data as any).telefono && (
+                                    <p className="text-xs font-bold text-slate-500 mt-1">📞 {(modalDetalle.data as any).telefono}</p>
+                                )}
                             </div>
                             <button onClick={() => setModalDetalle({ open: false, data: null })} className="text-slate-300 hover:text-slate-800 text-xl font-bold p-2">✕</button>
                         </div>
@@ -584,7 +681,43 @@ const ControlDeRemitos: React.FC = () => {
                 </div>
             )}
 
-            {/* MODAL FIRMA (ACTUALIZADO CON RECHAZOS Y COPY) */}
+            {/* MODAL WHATSAPP (NUEVO) */}
+            {modalWhatsapp && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
+                    <div className="bg-white rounded-[2rem] p-8 w-full max-w-sm shadow-2xl animate-in zoom-in duration-200">
+                        <div className="text-center mb-6">
+                            <span className="text-4xl">📱</span>
+                            <h3 className="text-xl font-black text-slate-800 mt-2">Notificar al Cliente</h3>
+                            <p className="text-sm text-slate-500 mt-1">Este remito tiene un teléfono asociado.</p>
+                        </div>
+                        
+                        <div className="space-y-3">
+                            <button 
+                                onClick={() => confirmarAsignacion(true)}
+                                className="w-full p-4 bg-green-500 text-white rounded-xl font-bold shadow-lg hover:bg-green-600 transition-all flex items-center justify-center gap-2"
+                            >
+                                <span>💬</span> Asignar y Enviar WhatsApp
+                            </button>
+                            
+                            <button 
+                                onClick={() => confirmarAsignacion(false)}
+                                className="w-full p-4 bg-white text-slate-600 border border-slate-200 rounded-xl font-bold hover:bg-slate-50 transition-all"
+                            >
+                                Solo Asignar
+                            </button>
+                        </div>
+                        
+                        <button 
+                            onClick={() => setModalWhatsapp(null)}
+                            className="w-full mt-6 text-xs font-bold text-slate-400 uppercase hover:text-slate-600"
+                        >
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL FIRMA */}
             {modalFirma.open && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" onClick={() => setModalFirma({...modalFirma, open: false})}>
                     <div className="bg-white rounded-[2rem] p-8 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -603,7 +736,7 @@ const ControlDeRemitos: React.FC = () => {
                                     <img src={`data:image/png;base64,${modalFirma.data.clienteFirma.firma}`} className="max-h-40 object-contain" alt="Firma" />
                                 </div>
 
-                                {/* LISTA DE RECHAZOS (NUEVO) */}
+                                {/* LISTA DE RECHAZOS */}
                                 {modalFirma.data.itemsRechazados && modalFirma.data.itemsRechazados.length > 0 && (
                                     <div className="bg-red-50 p-4 rounded-2xl border border-red-100 text-center">
                                         <p className="text-[10px] font-black text-red-400 uppercase tracking-widest mb-2 flex items-center justify-center gap-1">⚠️ Items No Recibidos</p>
@@ -618,7 +751,7 @@ const ControlDeRemitos: React.FC = () => {
                                     </div>
                                 )}
 
-                                {/* BOTÓN COPIAR IMAGEN (NUEVO) */}
+                                {/* BOTÓN COPIAR IMAGEN */}
                                 <button 
                                     onClick={generarImagenComprobante}
                                     className="w-full py-3 bg-indigo-50 text-indigo-600 rounded-xl font-black uppercase text-xs hover:bg-indigo-100 transition-colors flex items-center justify-center gap-2 border border-indigo-100"
@@ -639,7 +772,7 @@ const ControlDeRemitos: React.FC = () => {
                 <div className="fixed inset-0 z-[100] flex justify-end">
                     <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
                     <div className="relative w-full max-w-lg bg-white h-full shadow-2xl p-8 overflow-y-auto animate-in slide-in-from-right duration-300">
-                        {/* ... SIDEBAR CONTENT (Igual que antes) ... */}
+                        {/* ... SIDEBAR CONTENT ... */}
                         <div className="flex justify-between items-center mb-8">
                             <h2 className="text-2xl font-black italic uppercase text-slate-800 tracking-tighter">Carga de Datos</h2>
                             <button onClick={() => setSidebarOpen(false)} className="text-slate-300 hover:text-slate-800 text-xl font-bold">✕</button>
@@ -668,6 +801,10 @@ const ControlDeRemitos: React.FC = () => {
                                 <div className="space-y-4 animate-in fade-in duration-500">
                                     <input type="text" placeholder="N° SOPORTE" className="w-full p-4 bg-slate-50 rounded-2xl font-bold uppercase text-sm border-slate-100" value={soporteData.numero} onChange={e => setSoporteData({...soporteData, numero: e.target.value})} />
                                     <input type="text" placeholder="CLIENTE" className="w-full p-4 bg-slate-50 rounded-2xl font-bold uppercase text-sm border-slate-100" value={soporteData.cliente} onChange={e => setSoporteData({...soporteData, cliente: e.target.value})} />
+                                    
+                                    {/* --- NUEVO CAMPO DE TELÉFONO --- */}
+                                    <input type="text" placeholder="TELÉFONO (OPCIONAL)" className="w-full p-4 bg-slate-50 rounded-2xl font-bold uppercase text-sm border-slate-100" value={soporteData.telefono} onChange={e => setSoporteData({...soporteData, telefono: e.target.value})} />
+
                                     <input type="date" className="w-full p-4 bg-slate-50 rounded-2xl font-bold text-sm border-slate-100 uppercase" value={soporteData.fecha} onChange={e => setSoporteData({...soporteData, fecha: e.target.value})} />
                                     <textarea rows={5} placeholder="LISTA DE PRODUCTOS..." className="w-full p-4 bg-slate-50 rounded-2xl border-slate-100 font-bold uppercase text-sm" value={soporteData.productos} onChange={e => setSoporteData({...soporteData, productos: e.target.value})} />
                                 </div>

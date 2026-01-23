@@ -16,6 +16,9 @@ const ControlSoportes: React.FC<Props> = ({ onNavigate }) => {
     // Estado para el contador de alertas (Retiros pendientes)
     const [retirosPendientes, setRetirosPendientes] = useState(0);
 
+    // --- NUEVO: Estado para el Modal de WhatsApp ---
+    const [modalWhatsapp, setModalWhatsapp] = useState<{ open: boolean, soporte: any, nuevoRango: string } | null>(null);
+
     const rangos = ["Lunes Mañana", "Lunes Tarde", "Martes Mañana", "Martes Tarde", "Miércoles Mañana", "Miércoles Tarde", "Jueves Mañana", "Jueves Tarde", "Viernes Mañana", "Viernes Tarde"];
 
     useEffect(() => {
@@ -60,8 +63,78 @@ const ControlSoportes: React.FC<Props> = ({ onNavigate }) => {
 
     // --- ACCIONES ---
     
-    const asignarRango = (id: string, rango: string) => {
-        update(ref(db_realtime, `soportes/${id}`), { rangoEntrega: rango });
+    // 1. Intercepción del cambio de rango
+    const handleRangoChange = (soporte: any, nuevoRango: string) => {
+        // Si borra el rango, actualizamos directo
+        if (nuevoRango === "") {
+            update(ref(db_realtime, `soportes/${soporte.id}`), { rangoEntrega: "" });
+            return;
+        }
+
+        // Si tiene teléfono guardado, abrimos el modal
+        if (soporte.telefono) {
+            setModalWhatsapp({ open: true, soporte, nuevoRango });
+        } else {
+            // Si no tiene teléfono, actualizamos directo
+            update(ref(db_realtime, `soportes/${soporte.id}`), { rangoEntrega: nuevoRango });
+        }
+    };
+
+    // 2. Confirmación y Envío de WhatsApp
+    const confirmarAsignacion = (enviarWhatsapp: boolean) => {
+        if (!modalWhatsapp) return;
+        const { soporte, nuevoRango } = modalWhatsapp;
+
+        // A. Actualizar Firebase
+        update(ref(db_realtime, `soportes/${soporte.id}`), { rangoEntrega: nuevoRango });
+
+        // B. Lógica WhatsApp
+        if (enviarWhatsapp) {
+            const telefonoStr = soporte.telefono ? String(soporte.telefono) : "";
+            const telefonoLimpio = telefonoStr.replace(/\D/g, ''); 
+            
+            if (telefonoLimpio) {
+                // Agregar 549 para Argentina
+                const telefonoFull = telefonoLimpio.startsWith("54") ? telefonoLimpio : `549${telefonoLimpio}`;
+
+                // --- Fecha Amigable ---
+                let rangoAmigable = nuevoRango;
+                const partesRango = nuevoRango.split(" ");
+                if (partesRango.length === 2) {
+                    const [dia, turno] = partesRango;
+                    if (turno === "Mañana") rangoAmigable = `${dia} por la mañana`;
+                    else if (turno === "Tarde") rangoAmigable = `${dia} por la tarde`;
+                }
+
+                // --- Lista de Productos ---
+                // Soportes puede tener array de strings o string simple, normalizamos
+                let itemsTexto = "";
+                if (Array.isArray(soporte.productos)) {
+                    itemsTexto = soporte.productos.map((p: string) => `• ${p}`).join('\n');
+                } else if (typeof soporte.productos === 'string') {
+                    itemsTexto = `• ${soporte.productos}`;
+                } else {
+                    itemsTexto = "• Equipo en reparación";
+                }
+
+                // --- Construcción del Mensaje ---
+                const mensaje = `Hola *${soporte.cliente}*. 👋
+                
+Nos comunicamos para informarte que el día *${rangoAmigable}* estaremos entregando tu *Soporte N° ${soporte.numeroSoporte}*.
+
+🛠️ *Detalle del servicio:*
+${itemsTexto}
+
+Saludos, *BIPOKIDS*.`;
+                
+                const url = `https://web.whatsapp.com/send?phone=${telefonoFull}&text=${encodeURIComponent(mensaje)}`;
+                window.open(url, '_blank');
+            } else {
+                alert("Error: El teléfono no tiene un formato válido.");
+            }
+        }
+
+        setModalWhatsapp(null);
     };
 
     const toggleEstadoSoporte = (id: string, estadoActual: string) => {
@@ -173,7 +246,11 @@ const ControlSoportes: React.FC<Props> = ({ onNavigate }) => {
                                     return (
                                         <tr key={s.id} className="hover:bg-orange-50/30 transition-colors text-[11px] font-bold text-slate-700">
                                             <td className="p-5 font-mono text-orange-600">#{s.numeroSoporte}</td>
-                                            <td className="p-5 uppercase">{s.cliente}</td>
+                                            <td className="p-5 uppercase">
+                                                {s.cliente}
+                                                {/* Indicador visual de teléfono */}
+                                                {(s as any).telefono && <span className="ml-1 text-[8px] bg-green-100 text-green-600 px-1 rounded border border-green-200">📞</span>}
+                                            </td>
                                             <td className="p-5 text-slate-500">{s.fechaSoporte}</td>
                                             <td className="p-5 text-xs text-slate-500 font-normal truncate max-w-xs" title={renderProductos(s.productos)}>
                                                 {renderProductos(s.productos)}
@@ -193,7 +270,7 @@ const ControlSoportes: React.FC<Props> = ({ onNavigate }) => {
                                                     {esResuelto && (
                                                         <select 
                                                             value={s.rangoEntrega || ""} 
-                                                            onChange={(e) => asignarRango(s.id, e.target.value)}
+                                                            onChange={(e) => handleRangoChange(s, e.target.value)}
                                                             className="bg-white border-2 border-green-100 rounded-lg p-2 text-[10px] font-black uppercase outline-none focus:border-green-400 cursor-pointer hover:border-green-300 transition-colors w-32"
                                                         >
                                                             <option value="">🚚 ASIGNAR</option>
@@ -205,8 +282,8 @@ const ControlSoportes: React.FC<Props> = ({ onNavigate }) => {
                                                         onClick={() => toggleEstadoSoporte(s.id, s.estado)}
                                                         className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-colors shadow-sm flex items-center gap-1 ${
                                                             esResuelto 
-                                                                ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200 border border-yellow-200' 
-                                                                : 'bg-green-500 text-white hover:bg-green-600 border border-green-600'
+                                                            ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200 border border-yellow-200' 
+                                                            : 'bg-green-500 text-white hover:bg-green-600 border border-green-600'
                                                         }`}
                                                         title={esResuelto ? "Volver a Pendiente" : "Marcar como Resuelto"}
                                                     >
@@ -234,6 +311,42 @@ const ControlSoportes: React.FC<Props> = ({ onNavigate }) => {
                     </table>
                 </div>
             </section>
+
+            {/* MODAL WHATSAPP (NUEVO) */}
+            {modalWhatsapp && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
+                    <div className="bg-white rounded-[2rem] p-8 w-full max-w-sm shadow-2xl animate-in zoom-in duration-200">
+                        <div className="text-center mb-6">
+                            <span className="text-4xl">📱</span>
+                            <h3 className="text-xl font-black text-slate-800 mt-2">Notificar al Cliente</h3>
+                            <p className="text-sm text-slate-500 mt-1">Este soporte tiene un teléfono asociado.</p>
+                        </div>
+                        
+                        <div className="space-y-3">
+                            <button 
+                                onClick={() => confirmarAsignacion(true)}
+                                className="w-full p-4 bg-green-500 text-white rounded-xl font-bold shadow-lg hover:bg-green-600 transition-all flex items-center justify-center gap-2"
+                            >
+                                <span>💬</span> Asignar y Enviar WhatsApp
+                            </button>
+                            
+                            <button 
+                                onClick={() => confirmarAsignacion(false)}
+                                className="w-full p-4 bg-white text-slate-600 border border-slate-200 rounded-xl font-bold hover:bg-slate-50 transition-all"
+                            >
+                                Solo Asignar
+                            </button>
+                        </div>
+                        
+                        <button 
+                            onClick={() => setModalWhatsapp(null)}
+                            className="w-full mt-6 text-xs font-bold text-slate-400 uppercase hover:text-slate-600"
+                        >
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+            )}
 
         </div>
     );
