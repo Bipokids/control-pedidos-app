@@ -202,7 +202,7 @@ const ControlDeRemitos: React.FC = () => {
                 textoAccion = `estaremos ${data.esTransporte ? "despachando" : "entregando"} tu pedido`;
             } else {
                 // Si es soporte
-                textoAccion = `estaremos entregando tu equipo (Soporte)`;
+                textoAccion = `estaremos entregando tu Soporte`;
             }
 
             // C. Construcción de Lista de Items
