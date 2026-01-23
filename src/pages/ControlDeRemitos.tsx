@@ -189,7 +189,7 @@ const ControlDeRemitos: React.FC = () => {
             // 4. Construcción
             const mensaje = `Hola *${data.cliente}*. 👋
             
-Nos comunicamos de *BIPOKIDS* para informarte que el día *${rangoAmigable}* ${textoAccion} número *${numeroRef}*.
+Nos comunicamos para informarte que el día *${rangoAmigable}* ${textoAccion} número *${numeroRef}*.
 
 📋 *Detalle:*
 ${itemsLista}
