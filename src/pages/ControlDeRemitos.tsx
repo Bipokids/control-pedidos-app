@@ -20,7 +20,7 @@ const ControlDeRemitos: React.FC = () => {
     const [modalFirma, setModalFirma] = useState<{ open: boolean, data: any, type: 'remito' | 'soporte' }>({ open: false, data: null, type: 'remito' });
     const [modalDetalle, setModalDetalle] = useState<{ open: boolean, data: any | null }>({ open: false, data: null });
     
-    // --- NUEVO: Modal para WhatsApp ---
+    // --- NUEVO: Modal para WhatsApp (Asignación Automática) ---
     const [modalWhatsapp, setModalWhatsapp] = useState<{ open: boolean, remito: any, nuevoRango: string } | null>(null);
 
     const [tablaExpandida, setTablaExpandida] = useState(true);
@@ -40,7 +40,7 @@ const ControlDeRemitos: React.FC = () => {
     const [soporteData, setSoporteData] = useState({
         numero: '',
         cliente: '',
-        telefono: '', // <--- AGREGAR ESTO
+        telefono: '', // Campo de teléfono para soportes
         fecha: new Date().toISOString().split('T')[0],
         productos: ''
     });
@@ -148,8 +148,54 @@ const ControlDeRemitos: React.FC = () => {
 
     const todosEntregados = [...entregadosRemitos, ...entregadosSoportes];
 
-    // --- FUNCIÓN IMAGEN COMPROBANTE ---
-    const generarImagenComprobante = async () => {
+    // --- HELPER: GENERAR Y ENVIAR WHATSAPP ---
+    const enviarMensajeWhatsapp = (data: any, rango: string) => {
+        const telefonoStr = data.telefono ? String(data.telefono) : "";
+        const telefonoLimpio = telefonoStr.replace(/\D/g, ''); 
+        
+        if (telefonoLimpio) {
+            // Agregar 549 para Argentina (Asumiendo números locales)
+            const telefonoFull = telefonoLimpio.startsWith("54") ? telefonoLimpio : `549${telefonoLimpio}`;
+
+            // --- Lógica de Fecha Amigable ---
+            let rangoAmigable = rango;
+            const partesRango = rango.split(" ");
+            if (partesRango.length === 2) {
+                const [dia, turno] = partesRango;
+                if (turno === "Mañana") rangoAmigable = `${dia} por la mañana`;
+                else if (turno === "Tarde") rangoAmigable = `${dia} por la tarde`;
+            }
+
+            // --- Lógica de Verbo Dinámico ---
+            const verboAccion = data.esTransporte ? "despachando" : "entregando";
+
+            // --- Lógica de Lista Vertical de Items ---
+            const itemsLista = Array.isArray(data.articulos) 
+                ? data.articulos.map((a: any) => `• ${a.cantidad}x ${a.codigo}`).join('\n')
+                : "• Varios productos";
+
+            // --- Construcción del Mensaje ---
+            const mensaje = `Hola *${data.cliente}*. 👋
+            
+Nos comunicamos de *BIPOKIDS* para informarte que el día *${rangoAmigable}* estaremos ${verboAccion} tu pedido número *${data.numeroRemito}*.
+
+📋 *Detalle del pedido:*
+${itemsLista}
+
+Saludos, *BIPOKIDS*.`;
+            
+            const url = `https://web.whatsapp.com/send?phone=${telefonoFull}&text=${encodeURIComponent(mensaje)}`;
+            window.open(url, '_blank');
+            return true; // Éxito
+        } else {
+            alert("Error: El teléfono no tiene un formato válido.");
+            return false; // Fallo
+        }
+    };
+
+    // --- ACCIONES ---
+
+    const generarImagenComprobante = async () => { /* ... Lógica existente ... */ 
         if (!modalFirma.data) return;
         const { clienteFirma, itemsRechazados, _type } = modalFirma.data;
         if (!clienteFirma?.firma) return alert("No hay firma disponible");
@@ -157,71 +203,44 @@ const ControlDeRemitos: React.FC = () => {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
-
+        
         const width = 600;
         let height = 220; 
-        
         const rechazos = (_type === 'remito' && itemsRechazados) ? itemsRechazados : [];
         if (rechazos.length > 0) height += 60 + (rechazos.length * 30);
+        canvas.width = width; canvas.height = height;
 
-        canvas.width = width;
-        canvas.height = height;
-
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, width, height);
 
         let currentY = 20;
-
         const img = new Image();
         img.src = `data:image/png;base64,${clienteFirma.firma}`;
         await new Promise((resolve) => { img.onload = resolve; });
         
-        const destW = 200; 
-        const destH = 100;
-        const sourceH = img.height * 0.75; 
-
+        const destW = 200; const destH = 100; const sourceH = img.height * 0.75; 
         ctx.drawImage(img, 0, 0, img.width, sourceH, (width - destW) / 2, currentY, destW, destH);
         currentY += destH + 10;
 
-        ctx.fillStyle = '#000000';
-        ctx.font = 'bold 20px sans-serif'; 
-        ctx.textAlign = 'center'; 
+        ctx.fillStyle = '#000000'; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center'; 
         ctx.fillText(`${clienteFirma.nombre}`, width / 2, currentY + 20);
-        ctx.font = '16px sans-serif';
-        ctx.fillText(`DNI: ${clienteFirma.dni}`, width / 2, currentY + 45);
+        ctx.font = '16px sans-serif'; ctx.fillText(`DNI: ${clienteFirma.dni}`, width / 2, currentY + 45);
         currentY += 70; 
 
         if (rechazos.length > 0) {
-            ctx.font = 'bold 20px sans-serif'; 
-            const title = "ITEMS NO RECIBIDOS / RECHAZADOS";
-            const icon = "⚠️";
-            const iconWidth = ctx.measureText(icon).width;
-            const titleWidth = ctx.measureText(title).width;
-            const totalW = iconWidth + 10 + titleWidth;
-            let startX = (width - totalW) / 2;
+            ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'left';
+            const title = "ITEMS NO RECIBIDOS / RECHAZADOS"; const icon = "⚠️";
+            const iconWidth = ctx.measureText(icon).width; const titleWidth = ctx.measureText(title).width;
+            const totalW = iconWidth + 10 + titleWidth; let startX = (width - totalW) / 2;
 
-            ctx.textAlign = 'left';
-            ctx.fillText(icon, startX, currentY);
-            ctx.fillStyle = '#ef4444'; 
-            ctx.fillText(title, startX + iconWidth + 10, currentY);
-            currentY += 35;
+            ctx.fillText(icon, startX, currentY); ctx.fillStyle = '#ef4444'; 
+            ctx.fillText(title, startX + iconWidth + 10, currentY); currentY += 35;
 
-            ctx.fillStyle = '#b91c1c';
-            ctx.font = 'bold 16px monospace';
-            ctx.textAlign = 'center';
-            rechazos.forEach((item: any) => {
-                ctx.fillText(`• ${item.codigo}: ${item.cantidadRechazada} un.`, width / 2, currentY);
-                currentY += 25;
-            });
+            ctx.fillStyle = '#b91c1c'; ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
+            rechazos.forEach((item: any) => { ctx.fillText(`• ${item.codigo}: ${item.cantidadRechazada} un.`, width / 2, currentY); currentY += 25; });
         }
 
         canvas.toBlob(async (blob) => {
-            if (blob) {
-                try {
-                    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-                    alert("✅ Imagen copiada.");
-                } catch (e) { alert("❌ Error al copiar."); }
-            }
+            if (blob) { try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); alert("✅ Imagen copiada."); } catch (e) { alert("❌ Error al copiar."); } }
         });
     };
 
@@ -232,79 +251,70 @@ const ControlDeRemitos: React.FC = () => {
         }
     };
 
-    // --- NUEVO: Manejo de Cambio de Rango (Intercepción para WhatsApp) ---
+    // --- NUEVO: Manejo de Cambio de Rango (Intercepción) ---
     const handleRangoChange = (remitoId: string, remitoData: any, nuevoRango: string) => {
-        // Si borra el rango, actualizamos directo
         if (nuevoRango === "") {
-            update(ref(db_realtime, `remitos/${remitoId}`), { rangoDespacho: "" });
+            // Si borra el rango, reseteamos y marcamos como no notificado
+            update(ref(db_realtime, `remitos/${remitoId}`), { rangoDespacho: "", notificado: false });
             return;
         }
 
-        // Si tiene teléfono guardado, abrimos el modal de decisión
+        // Si tiene teléfono, ofrecemos enviar WhatsApp
         if (remitoData.telefono) {
             setModalWhatsapp({ open: true, remito: { ...remitoData, id: remitoId }, nuevoRango });
         } else {
-            // Si no tiene teléfono, actualizamos directo
-            update(ref(db_realtime, `remitos/${remitoId}`), { rangoDespacho: nuevoRango });
+            // Si no tiene teléfono, solo actualizamos y marcamos como no notificado
+            update(ref(db_realtime, `remitos/${remitoId}`), { rangoDespacho: nuevoRango, notificado: false });
         }
     };
 
-    // --- CONFIRMAR ASIGNACIÓN (ACTUALIZADO CON FORMATO PRO Y VERBO DINÁMICO) ---
-    const confirmarAsignacion = (enviarWhatsapp: boolean) => {
+    // --- NUEVO: Confirmar Asignación (Desde Modal WhatsApp) ---
+    const confirmarAsignacion = (enviar: boolean) => {
         if (!modalWhatsapp) return;
         const { remito, nuevoRango } = modalWhatsapp;
 
-        // 1. Actualizar Rango en Firebase
-        update(ref(db_realtime, `remitos/${remito.id}`), { rangoDespacho: nuevoRango });
+        const updates: any = { rangoDespacho: nuevoRango };
 
-        // 2. Si eligió enviar WhatsApp
-        if (enviarWhatsapp) {
-            const telefonoStr = remito.telefono ? String(remito.telefono) : "";
-            const telefonoLimpio = telefonoStr.replace(/\D/g, ''); 
-            
-            if (telefonoLimpio) {
-                // Agregar 549 para Argentina
-                const telefonoFull = telefonoLimpio.startsWith("54") ? telefonoLimpio : `549${telefonoLimpio}`;
-
-                // --- A. LÓGICA DE FECHA AMIGABLE ---
-                let rangoAmigable = nuevoRango;
-                const partesRango = nuevoRango.split(" ");
-                if (partesRango.length === 2) {
-                    const [dia, turno] = partesRango;
-                    if (turno === "Mañana") rangoAmigable = `${dia} por la mañana`;
-                    else if (turno === "Tarde") rangoAmigable = `${dia} por la tarde`;
-                }
-
-                // --- B. LÓGICA DE VERBO (TRANSPORTE VS ENTREGA) ---
-                // Si esTransporte es true -> "despachando", sino -> "entregando"
-                const verboAccion = remito.esTransporte ? "despachando" : "entregando";
-
-                // --- C. LISTA VERTICAL DE ITEMS ---
-                const itemsLista = Array.isArray(remito.articulos) 
-                    ? remito.articulos.map((a: any) => `• ${a.cantidad}x ${a.codigo}`).join('\n')
-                    : "• Varios productos";
-
-                // --- D. CONSTRUCCIÓN DEL MENSAJE ---
-                const mensaje = `Hola *${remito.cliente}*. 👋
-                
-Nos comunicamos para informarte que el día *${rangoAmigable}* estaremos ${verboAccion} tu pedido número *${remito.numeroRemito}*.
-
-📋 *Detalle del pedido:*
-${itemsLista}
-
-Saludos, *BIPOKIDS*.`;
-                
-                const url = `https://web.whatsapp.com/send?phone=${telefonoFull}&text=${encodeURIComponent(mensaje)}`;
-                window.open(url, '_blank');
-            } else {
-                alert("Error: El teléfono no tiene un formato válido.");
-            }
+        if (enviar) {
+            const exito = enviarMensajeWhatsapp(remito, nuevoRango);
+            if (exito) updates.notificado = true; // Marcamos como notificado si se abrió el WhatsApp
+        } else {
+            updates.notificado = false; // El usuario eligió "Solo Asignar", por lo tanto NO está notificado
         }
 
+        update(ref(db_realtime, `remitos/${remito.id}`), updates);
         setModalWhatsapp(null);
     };
 
-    // --- PARSER CORREGIDO (Detecta Teléfono vs DNI) ---
+    // --- NUEVO: Notificar Manualmente (Desde Modal Detalle) ---
+    const notificarDesdeDetalle = () => {
+        if (!modalDetalle.data) return;
+        const data = modalDetalle.data;
+        const rango = data.rangoDespacho || "";
+
+        if (!rango) return alert("❌ Primero debes asignar un rango de entrega.");
+
+        if (window.confirm(`¿Enviar notificación de WhatsApp para el día ${rango}?`)) {
+            const exito = enviarMensajeWhatsapp(data, rango);
+            if (exito) {
+                // Actualizamos la base de datos
+                let realId = (data as any).id;
+                // Fallback por si el ID no vino directo
+                if (!realId) {
+                    const foundEntry = Object.entries(remitos).find(([_, val]) => val.numeroRemito === data.numeroRemito);
+                    if (foundEntry) realId = foundEntry[0];
+                }
+
+                if (realId) {
+                    update(ref(db_realtime, `remitos/${realId}`), { notificado: true });
+                    // Actualizamos vista local para feedback inmediato
+                    setModalDetalle({ ...modalDetalle, data: { ...data, notificado: true } });
+                }
+            }
+        }
+    };
+
+    // --- PARSER INTELIGENTE (Francotirador de Teléfonos) ---
     const guardarDatos = async () => {
         if (!tipoCarga) return;
         setLoading(true);
@@ -315,17 +325,16 @@ Saludos, *BIPOKIDS*.`;
                 let cliente = "";
                 let telefono = ""; 
 
-                // ... dentro de guardarDatos, después de definir las variables ...
-
                 const lineasDatos = datosRemitoRaw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
                 
+                // --- ESTRATEGIA 1: FRANCOTIRADOR (PRIORIDAD MÁXIMA) ---
+                // Buscamos cualquier número de 10 dígitos que empiece con 11 o 15 en todo el texto
                 const matchCelular = datosRemitoRaw.match(/\b(?:11|15)\d{8}\b/);
-                
                 if (matchCelular) {
-                    telefono = matchCelular[0]; // ¡Encontrado 1164611408!
+                    telefono = matchCelular[0]; 
                 }
 
-                // --- BUCLE DE PARSEO (SOLO SI NO ENCONTRAMOS CELULAR ARRIBA) ---
+                // --- BUCLE DE PARSEO (FALLBACK) ---
                 for (let i = 0; i < lineasDatos.length; i++) {
                     const linea = lineasDatos[i];
 
@@ -338,21 +347,18 @@ Saludos, *BIPOKIDS*.`;
                         cliente = linea;
                     }
 
-                    // ESTRATEGIA 2: BÚSQUEDA SECUENCIAL (FALLBACK)
-                    // Solo entra aquí si la Estrategia 1 falló (ej: es un teléfono fijo o formato raro)
+                    // ESTRATEGIA 2: Si el francotirador falló, buscamos etiquetas
                     if (!telefono && /(Tel[eé]fono|Celular|M[óo]vil|Tel)[:\.]?/i.test(linea)) {
                         let posibleNumero = linea.replace(/(Tel[eé]fono|Celular|M[óo]vil|Tel)[:\.]?/i, "").trim();
                         
-                        // Si la línea está vacía, miramos la siguiente
                         if (!posibleNumero && lineasDatos[i+1]) {
-                             // Evitamos explícitamente el DNI si está justo abajo
+                             // Evitamos DNI
                              if (!lineasDatos[i+1].includes("30775261") && !/^DNI/i.test(lineasDatos[i+1])) {
                                  posibleNumero = lineasDatos[i+1];
                              }
                         }
 
                         const soloNumeros = posibleNumero.replace(/\D/g, '');
-                        // Filtramos DNI por longitud (el DNI es 8, el celular es 10)
                         if (soloNumeros.length > 8) { 
                             telefono = soloNumeros;
                         }
@@ -387,13 +393,13 @@ Saludos, *BIPOKIDS*.`;
                     telefono, 
                     articulos, aclaraciones: aclaracionesRaw,
                     produccion: necesitaProduccion, esTransporte, estado: null, estadoPreparacion: "Pendiente",
-                    rangoDespacho: "", timestamp: new Date().toISOString()
+                    rangoDespacho: "", notificado: false, timestamp: new Date().toISOString()
                 });
             } else {
                 await push(ref(db_realtime, 'soportes'), {
                     numeroSoporte: soporteData.numero, 
                     cliente: soporteData.cliente,
-                    telefono: soporteData.telefono, // <--- AGREGAR ESTO
+                    telefono: soporteData.telefono,
                     fechaSoporte: soporteData.fecha, 
                     productos: soporteData.productos.split('\n').filter(Boolean),
                     estado: "Pendiente", 
@@ -519,18 +525,19 @@ Saludos, *BIPOKIDS*.`;
 
                                     return (
                                         <tr key={id} className={`hover:bg-slate-200 transition-colors text-[11px] font-bold ${bgClass} ${borderClass}`}>
-                                            <td className="p-5 font-mono cursor-pointer hover:text-blue-600 hover:underline" onClick={() => setModalDetalle({ open: true, data: r })} title="Ver detalle">#{r.numeroRemito}</td>
+                                            <td className="p-5 font-mono cursor-pointer hover:text-blue-600 hover:underline" onClick={() => setModalDetalle({ open: true, data: { ...r, id } })} title="Ver detalle">#{r.numeroRemito}</td>
                                             <td className="p-5 uppercase">
                                                 {r.cliente}
                                                 {/* Indicador visual de que tiene teléfono */}
                                                 {(r as any).telefono && <span className="ml-1 text-[8px] bg-green-100 text-green-600 px-1 rounded border border-green-200">📞</span>}
+                                                {/* Indicador visual de NOTIFICADO */}
+                                                {(r as any).notificado && <span className="ml-1 text-[8px] bg-blue-100 text-blue-600 px-1 rounded border border-blue-200" title="Cliente Notificado">✅</span>}
                                             </td>
                                             <td className="p-5 text-center"><input type="checkbox" checked={r.produccion} onChange={(e) => update(ref(db_realtime, `remitos/${id}`), { produccion: e.target.checked })} className="w-4 h-4 rounded border-slate-300 text-blue-600" /></td>
                                             <td className="p-5 text-center">{r.produccion && <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase shadow-sm ${r.estado === 'Listo' ? 'bg-green-500 text-white' : 'bg-yellow-200 text-yellow-800'}`}>{r.estado || 'PENDIENTE'}</span>}</td>
                                             <td className="p-5 text-center"><span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase shadow-sm bg-white/50 border border-slate-200`}>{r.estadoPreparacion || 'PENDIENTE'}</span></td>
                                             <td className="p-5 text-center"><button onClick={() => update(ref(db_realtime, `remitos/${id}`), { prioridad: !r.prioridad })} className={`text-lg transition-transform active:scale-90 ${r.prioridad ? 'grayscale-0' : 'grayscale opacity-20'}`}>🔥</button></td>
                                             <td className="p-5 text-center">
-                                                {/* ACTUALIZADO: Usamos handleRangoChange en lugar de update directo */}
                                                 <select value={r.rangoDespacho || ""} onChange={(e) => handleRangoChange(id, r, e.target.value)} className="bg-white/50 border border-slate-300 rounded-xl p-2 text-[10px] font-black uppercase outline-none focus:bg-white">
                                                     <option value="">-- SELECCIONAR --</option>
                                                     {rangos.map(rng => <option key={rng} value={rng}>{rng}</option>)}
@@ -564,13 +571,14 @@ Saludos, *BIPOKIDS*.`;
                                             if (r.estadoPreparacion === 'Despachado') bgChip = 'bg-cyan-100 text-cyan-700 border-cyan-500';
                                             if (r.prioridad) bgChip = 'bg-red-50 text-red-700 border-red-500';
                                             return (
-                                                <span key={id} onClick={() => setModalDetalle({ open: true, data: r })} className={`px-3 py-2 rounded-xl text-[9px] font-black border-l-4 shadow-sm cursor-pointer hover:scale-105 transition-transform ${bgChip}`}>
-                                                    {r.cliente}
+                                                <span key={id} onClick={() => setModalDetalle({ open: true, data: { ...r, id } })} className={`px-3 py-2 rounded-xl text-[9px] font-black border-l-4 shadow-sm cursor-pointer hover:scale-105 transition-transform ${bgChip} flex justify-between items-center`}>
+                                                    <span className="truncate max-w-[90%]">{r.cliente}</span>
+                                                    {(r as any).notificado && <span className="text-[8px] ml-1">✅</span>}
                                                 </span>
                                             );
                                         })}
                                         {Object.entries(soportes).filter(([,s]) => s.rangoEntrega === match && s.estado !== "Entregado").map(([id,s]) => (
-                                            <span key={id} onClick={() => setModalDetalle({ open: true, data: s })} className="px-3 py-2 rounded-xl text-[9px] font-black border-l-4 bg-orange-50 text-orange-700 border-orange-500 shadow-sm flex items-center gap-2 cursor-pointer hover:scale-105 transition-transform"><span>🛠️</span> {s.cliente}</span>
+                                            <span key={id} onClick={() => setModalDetalle({ open: true, data: { ...s, id } })} className="px-3 py-2 rounded-xl text-[9px] font-black border-l-4 bg-orange-50 text-orange-700 border-orange-500 shadow-sm flex items-center gap-2 cursor-pointer hover:scale-105 transition-transform"><span>🛠️</span> {s.cliente}</span>
                                         ))}
                                         {tablaManual[`${diaFix}_${bloque}`] && Object.entries(tablaManual[`${diaFix}_${bloque}`]).map(([mId,m]:any) => (
                                             <span key={mId} className="px-3 py-2 rounded-xl text-[9px] font-black bg-amber-50 text-amber-700 border-l-4 border-amber-400 italic flex justify-between group">
@@ -627,11 +635,25 @@ Saludos, *BIPOKIDS*.`;
                         <div className="flex justify-between items-start mb-6 border-b border-slate-100 pb-4">
                             <div>
                                 <h3 className="text-2xl font-black text-slate-800 uppercase italic tracking-tighter">{modalDetalle.data.cliente}</h3>
-                                {modalDetalle.data.numeroRemito ? (
-                                    <p className="text-blue-600 font-mono font-bold text-sm bg-blue-50 inline-block px-2 py-1 rounded-lg mt-1">Remito #{modalDetalle.data.numeroRemito}</p>
-                                ) : (
-                                    <p className="text-orange-600 font-mono font-bold text-sm bg-orange-50 inline-block px-2 py-1 rounded-lg mt-1">Soporte #{modalDetalle.data.numeroSoporte}</p>
-                                )}
+                                <div className="flex gap-2 items-center mt-1">
+                                    {modalDetalle.data.numeroRemito ? (
+                                        <p className="text-blue-600 font-mono font-bold text-sm bg-blue-50 inline-block px-2 py-1 rounded-lg">Remito #{modalDetalle.data.numeroRemito}</p>
+                                    ) : (
+                                        <p className="text-orange-600 font-mono font-bold text-sm bg-orange-50 inline-block px-2 py-1 rounded-lg">Soporte #{modalDetalle.data.numeroSoporte}</p>
+                                    )}
+
+                                    {/* STATUS NOTIFICADO EN DETALLE */}
+                                    {modalDetalle.data.numeroRemito && (
+                                        <span className={`px-2 py-1 rounded-lg text-xs font-bold border ${
+                                            modalDetalle.data.notificado 
+                                            ? "bg-green-100 text-green-700 border-green-200" 
+                                            : "bg-yellow-50 text-yellow-600 border-yellow-200"
+                                        }`}>
+                                            {modalDetalle.data.notificado ? "✅ Notificado" : "⚠️ No Notificado"}
+                                        </span>
+                                    )}
+                                </div>
+
                                 {/* Mostrar teléfono en detalle si existe */}
                                 {(modalDetalle.data as any).telefono && (
                                     <p className="text-xs font-bold text-slate-500 mt-1">📞 {(modalDetalle.data as any).telefono}</p>
@@ -676,7 +698,29 @@ Saludos, *BIPOKIDS*.`;
                                 )}
                             </div>
                         </div>
-                        <button onClick={() => setModalDetalle({ open: false, data: null })} className="w-full mt-6 p-4 bg-slate-900 text-white rounded-2xl font-black uppercase italic tracking-widest hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200">Cerrar</button>
+
+                        {/* ACCIONES DEL MODAL DETALLE */}
+                        <div className="mt-6 flex flex-col gap-3">
+                            
+                            {/* BOTÓN NOTIFICAR (Solo si tiene teléfono y es remito) */}
+                            {modalDetalle.data.numeroRemito && (modalDetalle.data as any).telefono && (
+                                <button 
+                                    onClick={notificarDesdeDetalle}
+                                    className={`w-full p-4 rounded-2xl font-black uppercase italic tracking-widest transition-all shadow-lg flex items-center justify-center gap-2 ${
+                                        modalDetalle.data.notificado
+                                        ? "bg-white text-green-600 border-2 border-green-500 hover:bg-green-50"
+                                        : "bg-green-500 text-white hover:bg-green-600"
+                                    }`}
+                                >
+                                    <span>💬</span> 
+                                    {modalDetalle.data.notificado ? "Re-enviar WhatsApp" : "Notificar por WhatsApp"}
+                                </button>
+                            )}
+
+                            <button onClick={() => setModalDetalle({ open: false, data: null })} className="w-full p-4 bg-slate-900 text-white rounded-2xl font-black uppercase italic tracking-widest hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200">
+                                Cerrar
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -703,7 +747,7 @@ Saludos, *BIPOKIDS*.`;
                                 onClick={() => confirmarAsignacion(false)}
                                 className="w-full p-4 bg-white text-slate-600 border border-slate-200 rounded-xl font-bold hover:bg-slate-50 transition-all"
                             >
-                                Solo Asignar
+                                Solo Asignar (Sin notificar)
                             </button>
                         </div>
                         
