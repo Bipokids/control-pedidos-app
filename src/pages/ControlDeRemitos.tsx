@@ -40,7 +40,7 @@ const ControlDeRemitos: React.FC = () => {
     const [soporteData, setSoporteData] = useState({
         numero: '',
         cliente: '',
-        telefono: '', // Campo de teléfono para soportes
+        telefono: '', 
         fecha: new Date().toISOString().split('T')[0],
         productos: ''
     });
@@ -148,16 +148,15 @@ const ControlDeRemitos: React.FC = () => {
 
     const todosEntregados = [...entregadosRemitos, ...entregadosSoportes];
 
-    // --- HELPER: GENERAR Y ENVIAR WHATSAPP ---
+    // --- HELPER: GENERAR Y ENVIAR WHATSAPP (POLIMÓRFICO) ---
     const enviarMensajeWhatsapp = (data: any, rango: string) => {
         const telefonoStr = data.telefono ? String(data.telefono) : "";
         const telefonoLimpio = telefonoStr.replace(/\D/g, ''); 
         
         if (telefonoLimpio) {
-            // Agregar 549 para Argentina (Asumiendo números locales)
             const telefonoFull = telefonoLimpio.startsWith("54") ? telefonoLimpio : `549${telefonoLimpio}`;
 
-            // --- Lógica de Fecha Amigable ---
+            // 1. Fecha Amigable
             let rangoAmigable = rango;
             const partesRango = rango.split(" ");
             if (partesRango.length === 2) {
@@ -166,36 +165,49 @@ const ControlDeRemitos: React.FC = () => {
                 else if (turno === "Tarde") rangoAmigable = `${dia} por la tarde`;
             }
 
-            // --- Lógica de Verbo Dinámico ---
-            const verboAccion = data.esTransporte ? "despachando" : "entregando";
+            // 2. Definir Tipo de Mensaje (Remito vs Soporte)
+            const esRemito = !!data.numeroRemito;
+            const numeroRef = esRemito ? data.numeroRemito : data.numeroSoporte;
+            
+            // Verbo: Si es remito transporte -> despachando, sino entregando
+            // Si es soporte -> entregando tu equipo
+            let textoAccion = "";
+            if (esRemito) {
+                textoAccion = `estaremos ${data.esTransporte ? "despachando" : "entregando"} tu pedido`;
+            } else {
+                textoAccion = `estaremos entregando tu equipo (Soporte)`;
+            }
 
-            // --- Lógica de Lista Vertical de Items ---
-            const itemsLista = Array.isArray(data.articulos) 
-                ? data.articulos.map((a: any) => `• ${a.cantidad}x ${a.codigo}`).join('\n')
-                : "• Varios productos";
+            // 3. Lista de Items
+            let itemsLista = "• Varios productos";
+            if (esRemito && Array.isArray(data.articulos)) {
+                itemsLista = data.articulos.map((a: any) => `• ${a.cantidad}x ${a.codigo}`).join('\n');
+            } else if (!esRemito && Array.isArray(data.productos)) {
+                itemsLista = data.productos.map((p: string) => `• ${p}`).join('\n');
+            }
 
-            // --- Construcción del Mensaje ---
+            // 4. Construcción
             const mensaje = `Hola *${data.cliente}*. 👋
             
-Nos comunicamos de *BIPOKIDS* para informarte que el día *${rangoAmigable}* estaremos ${verboAccion} tu pedido número *${data.numeroRemito}*.
+Nos comunicamos de *BIPOKIDS* para informarte que el día *${rangoAmigable}* ${textoAccion} número *${numeroRef}*.
 
-📋 *Detalle del pedido:*
+📋 *Detalle:*
 ${itemsLista}
 
 Saludos, *BIPOKIDS*.`;
             
             const url = `https://web.whatsapp.com/send?phone=${telefonoFull}&text=${encodeURIComponent(mensaje)}`;
             window.open(url, '_blank');
-            return true; // Éxito
+            return true; 
         } else {
             alert("Error: El teléfono no tiene un formato válido.");
-            return false; // Fallo
+            return false;
         }
     };
 
     // --- ACCIONES ---
 
-    const generarImagenComprobante = async () => { /* ... Lógica existente ... */ 
+    const generarImagenComprobante = async () => { 
         if (!modalFirma.data) return;
         const { clienteFirma, itemsRechazados, _type } = modalFirma.data;
         if (!clienteFirma?.firma) return alert("No hay firma disponible");
@@ -251,70 +263,71 @@ Saludos, *BIPOKIDS*.`;
         }
     };
 
-    // --- NUEVO: Manejo de Cambio de Rango (Intercepción) ---
+    // --- MANEJO DE CAMBIO DE RANGO (REMÍTOS - TABLA PRINCIPAL) ---
     const handleRangoChange = (remitoId: string, remitoData: any, nuevoRango: string) => {
         if (nuevoRango === "") {
-            // Si borra el rango, reseteamos y marcamos como no notificado
             update(ref(db_realtime, `remitos/${remitoId}`), { rangoDespacho: "", notificado: false });
             return;
         }
-
-        // Si tiene teléfono, ofrecemos enviar WhatsApp
         if (remitoData.telefono) {
             setModalWhatsapp({ open: true, remito: { ...remitoData, id: remitoId }, nuevoRango });
         } else {
-            // Si no tiene teléfono, solo actualizamos y marcamos como no notificado
             update(ref(db_realtime, `remitos/${remitoId}`), { rangoDespacho: nuevoRango, notificado: false });
         }
     };
 
-    // --- NUEVO: Confirmar Asignación (Desde Modal WhatsApp) ---
+    // --- CONFIRMAR ASIGNACIÓN (DESDE MODAL AUTOMÁTICO) ---
     const confirmarAsignacion = (enviar: boolean) => {
         if (!modalWhatsapp) return;
         const { remito, nuevoRango } = modalWhatsapp;
 
+        // Solo se usa para remitos en la tabla principal
         const updates: any = { rangoDespacho: nuevoRango };
 
         if (enviar) {
             const exito = enviarMensajeWhatsapp(remito, nuevoRango);
-            if (exito) updates.notificado = true; // Marcamos como notificado si se abrió el WhatsApp
+            if (exito) updates.notificado = true; 
         } else {
-            updates.notificado = false; // El usuario eligió "Solo Asignar", por lo tanto NO está notificado
+            updates.notificado = false;
         }
 
         update(ref(db_realtime, `remitos/${remito.id}`), updates);
         setModalWhatsapp(null);
     };
 
-    // --- NUEVO: Notificar Manualmente (Desde Modal Detalle) ---
+    // --- NOTIFICAR MANUALMENTE (DESDE MODAL DETALLE - REMITOS Y SOPORTES) ---
     const notificarDesdeDetalle = () => {
         if (!modalDetalle.data) return;
         const data = modalDetalle.data;
-        const rango = data.rangoDespacho || "";
+        const rango = data.rangoDespacho || data.rangoEntrega || ""; // Soportes usan rangoEntrega
 
         if (!rango) return alert("❌ Primero debes asignar un rango de entrega.");
 
         if (window.confirm(`¿Enviar notificación de WhatsApp para el día ${rango}?`)) {
             const exito = enviarMensajeWhatsapp(data, rango);
             if (exito) {
-                // Actualizamos la base de datos
+                // Determinar ID y Path
                 let realId = (data as any).id;
-                // Fallback por si el ID no vino directo
+                const esRemito = !!data.numeroRemito;
+                const path = esRemito ? 'remitos' : 'soportes';
+
+                // Búsqueda de ID si falla
                 if (!realId) {
-                    const foundEntry = Object.entries(remitos).find(([_, val]) => val.numeroRemito === data.numeroRemito);
+                    const collection = esRemito ? remitos : soportes;
+                    const keyProp = esRemito ? 'numeroRemito' : 'numeroSoporte';
+                    const foundEntry = Object.entries(collection).find(([_, val]: any) => val[keyProp] === data[keyProp]);
                     if (foundEntry) realId = foundEntry[0];
                 }
 
                 if (realId) {
-                    update(ref(db_realtime, `remitos/${realId}`), { notificado: true });
-                    // Actualizamos vista local para feedback inmediato
+                    update(ref(db_realtime, `${path}/${realId}`), { notificado: true });
                     setModalDetalle({ ...modalDetalle, data: { ...data, notificado: true } });
                 }
             }
         }
     };
 
-    // --- PARSER INTELIGENTE (Francotirador de Teléfonos) ---
+    // --- PARSER ---
     const guardarDatos = async () => {
         if (!tipoCarga) return;
         setLoading(true);
@@ -327,41 +340,26 @@ Saludos, *BIPOKIDS*.`;
 
                 const lineasDatos = datosRemitoRaw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
                 
-                // --- ESTRATEGIA 1: FRANCOTIRADOR (PRIORIDAD MÁXIMA) ---
-                // Buscamos cualquier número de 10 dígitos que empiece con 11 o 15 en todo el texto
                 const matchCelular = datosRemitoRaw.match(/\b(?:11|15)\d{8}\b/);
-                if (matchCelular) {
-                    telefono = matchCelular[0]; 
-                }
+                if (matchCelular) { telefono = matchCelular[0]; }
 
-                // --- BUCLE DE PARSEO (FALLBACK) ---
                 for (let i = 0; i < lineasDatos.length; i++) {
                     const linea = lineasDatos[i];
-
-                    // Buscar Cliente
                     if (/Raz[oó]n Social:/i.test(linea)) {
                         cliente = linea.replace(/Raz[oó]n Social:/i, "").trim();
                         if (!cliente && lineasDatos[i+1]) cliente = lineasDatos[i+1].trim();
-                    }
-                    else if (!cliente && linea.length > 3 && !/^CUIT|Fecha|Tel|Domicilio|Vendedor|Condici|DNI/i.test(linea)) {
+                    } else if (!cliente && linea.length > 3 && !/^CUIT|Fecha|Tel|Domicilio|Vendedor|Condici|DNI/i.test(linea)) {
                         cliente = linea;
                     }
-
-                    // ESTRATEGIA 2: Si el francotirador falló, buscamos etiquetas
                     if (!telefono && /(Tel[eé]fono|Celular|M[óo]vil|Tel)[:\.]?/i.test(linea)) {
                         let posibleNumero = linea.replace(/(Tel[eé]fono|Celular|M[óo]vil|Tel)[:\.]?/i, "").trim();
-                        
                         if (!posibleNumero && lineasDatos[i+1]) {
-                             // Evitamos DNI
                              if (!lineasDatos[i+1].includes("30775261") && !/^DNI/i.test(lineasDatos[i+1])) {
                                  posibleNumero = lineasDatos[i+1];
                              }
                         }
-
                         const soloNumeros = posibleNumero.replace(/\D/g, '');
-                        if (soloNumeros.length > 8) { 
-                            telefono = soloNumeros;
-                        }
+                        if (soloNumeros.length > 8) { telefono = soloNumeros; }
                     }
                 }
 
@@ -389,21 +387,15 @@ Saludos, *BIPOKIDS*.`;
                 }
 
                 await push(ref(db_realtime, 'remitos'), {
-                    numeroRemito, fechaEmision, cliente, 
-                    telefono, 
-                    articulos, aclaraciones: aclaracionesRaw,
+                    numeroRemito, fechaEmision, cliente, telefono, articulos, aclaraciones: aclaracionesRaw,
                     produccion: necesitaProduccion, esTransporte, estado: null, estadoPreparacion: "Pendiente",
                     rangoDespacho: "", notificado: false, timestamp: new Date().toISOString()
                 });
             } else {
                 await push(ref(db_realtime, 'soportes'), {
-                    numeroSoporte: soporteData.numero, 
-                    cliente: soporteData.cliente,
-                    telefono: soporteData.telefono,
-                    fechaSoporte: soporteData.fecha, 
-                    productos: soporteData.productos.split('\n').filter(Boolean),
-                    estado: "Pendiente", 
-                    timestamp: new Date().toISOString()
+                    numeroSoporte: soporteData.numero, cliente: soporteData.cliente, telefono: soporteData.telefono,
+                    fechaSoporte: soporteData.fecha, productos: soporteData.productos.split('\n').filter(Boolean),
+                    estado: "Pendiente", rangoEntrega: "", notificado: false, timestamp: new Date().toISOString()
                 });
             }
             alert("✅ Guardado correctamente");
@@ -415,13 +407,9 @@ Saludos, *BIPOKIDS*.`;
 
     return (
         <div className="max-w-7xl mx-auto px-4 pb-20 pt-10 font-sans bg-slate-50 min-h-screen relative">
-            
-            {/* ENCABEZADO */}
             <header className="mb-12 flex justify-between items-end">
                 <div>
-                    <h1 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">
-                        Panel de <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600">Control</span>
-                    </h1>
+                    <h1 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">Panel de <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600">Control</span></h1>
                     <p className="text-slate-500 font-medium text-sm">Logística y monitoreo centralizado.</p>
                 </div>
                 <div className="hidden md:block text-right">
@@ -430,27 +418,14 @@ Saludos, *BIPOKIDS*.`;
                 </div>
             </header>
 
-            {/* CONTADORES */}
             <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Logística (Remitos)</h3>
                     <div className="grid grid-cols-4 gap-2">
                         <StatCard label="Pendientes" val={rPendientes} color="border-orange-300" />
-                        <StatCard 
-                            label="Producción" val={rProduccion} color="border-yellow-400" 
-                            onClick={() => setFiltroRapido(filtroRapido === 'produccion' ? null : 'produccion')}
-                            isActive={filtroRapido === 'produccion'}
-                        />
-                        <StatCard 
-                            label="Listos" val={rDespacho} color="border-green-500" 
-                            onClick={() => setFiltroRapido(filtroRapido === 'listos' ? null : 'listos')}
-                            isActive={filtroRapido === 'listos'}
-                        />
-                        <StatCard 
-                            label="Sin Fecha" val={rListosSinFecha} color="border-purple-500" 
-                            onClick={() => setFiltroRapido(filtroRapido === 'sin_fecha' ? null : 'sin_fecha')}
-                            isActive={filtroRapido === 'sin_fecha'}
-                        />
+                        <StatCard label="Producción" val={rProduccion} color="border-yellow-400" onClick={() => setFiltroRapido(filtroRapido === 'produccion' ? null : 'produccion')} isActive={filtroRapido === 'produccion'} />
+                        <StatCard label="Listos" val={rDespacho} color="border-green-500" onClick={() => setFiltroRapido(filtroRapido === 'listos' ? null : 'listos')} isActive={filtroRapido === 'listos'} />
+                        <StatCard label="Sin Fecha" val={rListosSinFecha} color="border-purple-500" onClick={() => setFiltroRapido(filtroRapido === 'sin_fecha' ? null : 'sin_fecha')} isActive={filtroRapido === 'sin_fecha'} />
                     </div>
                 </div>
                 <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
@@ -463,74 +438,38 @@ Saludos, *BIPOKIDS*.`;
                 </div>
             </div>
 
-            {/* BUSCADOR */}
             <section className="mb-4 flex gap-4 items-center">
-                <div className="relative flex-1">
-                    <input type="text" placeholder="🔍 BUSCAR POR CLIENTE, N° REMITO O ZONA..." value={filtro} onChange={(e) => setFiltro(e.target.value)} className="w-full p-5 bg-white border-2 border-slate-100 rounded-[2rem] shadow-sm focus:border-blue-500 outline-none font-bold text-sm uppercase italic" />
-                </div>
-                {filtroRapido && (
-                    <button onClick={() => setFiltroRapido(null)} className="px-4 py-2 bg-red-50 text-red-600 rounded-xl font-bold text-xs uppercase hover:bg-red-100 transition-colors flex items-center gap-2 border border-red-100">
-                        <span>✖</span> {filtroRapido === 'sin_fecha' ? 'Viendo Sin Fecha' : filtroRapido === 'produccion' ? 'Viendo Producción' : 'Viendo Listos'}
-                    </button>
-                )}
+                <div className="relative flex-1"><input type="text" placeholder="🔍 BUSCAR POR CLIENTE, N° REMITO O ZONA..." value={filtro} onChange={(e) => setFiltro(e.target.value)} className="w-full p-5 bg-white border-2 border-slate-100 rounded-[2rem] shadow-sm focus:border-blue-500 outline-none font-bold text-sm uppercase italic" /></div>
+                {filtroRapido && (<button onClick={() => setFiltroRapido(null)} className="px-4 py-2 bg-red-50 text-red-600 rounded-xl font-bold text-xs uppercase hover:bg-red-100 transition-colors flex items-center gap-2 border border-red-100"><span>✖</span> {filtroRapido === 'sin_fecha' ? 'Viendo Sin Fecha' : filtroRapido === 'produccion' ? 'Viendo Producción' : 'Viendo Listos'}</button>)}
             </section>
 
-            {/* BOTÓN COLAPSAR */}
             <div className="flex justify-between items-center mb-4 px-2">
-                <h3 className="text-xl font-black italic uppercase text-slate-400 flex items-center gap-2">
-                    <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                    Listado de Pedidos ({remitosFiltrados.length})
-                </h3>
-                <button onClick={() => setTablaExpandida(!tablaExpandida)} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl shadow-sm hover:bg-slate-50 transition-all font-bold text-xs uppercase text-slate-600">
-                    {tablaExpandida ? 'Contraer' : 'Desplegar'}
-                    <span className={`text-lg transition-transform duration-300 ${tablaExpandida ? 'rotate-180' : 'rotate-0'}`}>▼</span>
-                </button>
+                <h3 className="text-xl font-black italic uppercase text-slate-400 flex items-center gap-2"><span className="w-2 h-2 bg-blue-500 rounded-full"></span> Listado de Pedidos ({remitosFiltrados.length})</h3>
+                <button onClick={() => setTablaExpandida(!tablaExpandida)} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl shadow-sm hover:bg-slate-50 transition-all font-bold text-xs uppercase text-slate-600">{tablaExpandida ? 'Contraer' : 'Desplegar'}<span className={`text-lg transition-transform duration-300 ${tablaExpandida ? 'rotate-180' : 'rotate-0'}`}>▼</span></button>
             </div>
 
-            {/* TABLA PRINCIPAL */}
             {tablaExpandida && (
                 <section className="bg-white rounded-[2.5rem] shadow-xl shadow-blue-900/5 border border-slate-100 overflow-hidden mb-12 animate-in slide-in-from-top-4 fade-in duration-300">
                     <div className="overflow-x-auto">
                         <table className="min-w-full text-left">
                             <thead>
                                 <tr className="bg-slate-50/50 text-gray-400 font-black uppercase text-[10px] tracking-widest border-b border-slate-100">
-                                    <th className="p-5">N° Remito</th>
-                                    <th className="p-5">Cliente</th>
-                                    <th className="p-5 text-center">Producción</th>
-                                    <th className="p-5 text-center">Estado Prod.</th>
-                                    <th className="p-5 text-center">Preparación</th>
-                                    <th className="p-5 text-center">Prioridad</th>
-                                    <th className="p-5 text-center">Rango Despacho</th>
+                                    <th className="p-5">N° Remito</th><th className="p-5">Cliente</th><th className="p-5 text-center">Producción</th><th className="p-5 text-center">Estado Prod.</th><th className="p-5 text-center">Preparación</th><th className="p-5 text-center">Prioridad</th><th className="p-5 text-center">Rango Despacho</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {remitosFiltrados.map(([id, r], index) => {
                                     let bgClass = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
                                     const sinRango = !r.rangoDespacho || r.rangoDespacho === "";
-
                                     if (r.estadoPreparacion === 'Despachado') bgClass = 'bg-cyan-100 text-cyan-900';
-                                    else {
-                                        if (r.produccion) {
-                                            if (r.estado === 'Listo') {
-                                                if (sinRango) bgClass = 'bg-purple-100 text-purple-900';
-                                                else if (r.estadoPreparacion === 'Listo') bgClass = 'bg-green-100 text-green-900';
-                                                else bgClass = 'bg-yellow-100 text-yellow-900';
-                                            }
-                                        } else {
-                                            if (r.estadoPreparacion === 'Pendiente' && sinRango) bgClass = 'bg-purple-100 text-purple-900';
-                                            else if (r.estadoPreparacion === 'Listo') bgClass = 'bg-green-100 text-green-900';
-                                        }
-                                    }
+                                    else { if (r.produccion) { if (r.estado === 'Listo') { if (sinRango) bgClass = 'bg-purple-100 text-purple-900'; else if (r.estadoPreparacion === 'Listo') bgClass = 'bg-green-100 text-green-900'; else bgClass = 'bg-yellow-100 text-yellow-900'; } } else { if (r.estadoPreparacion === 'Pendiente' && sinRango) bgClass = 'bg-purple-100 text-purple-900'; else if (r.estadoPreparacion === 'Listo') bgClass = 'bg-green-100 text-green-900'; } }
                                     const borderClass = r.prioridad ? 'border-l-4 border-red-500' : '';
-
                                     return (
                                         <tr key={id} className={`hover:bg-slate-200 transition-colors text-[11px] font-bold ${bgClass} ${borderClass}`}>
                                             <td className="p-5 font-mono cursor-pointer hover:text-blue-600 hover:underline" onClick={() => setModalDetalle({ open: true, data: { ...r, id } })} title="Ver detalle">#{r.numeroRemito}</td>
                                             <td className="p-5 uppercase">
                                                 {r.cliente}
-                                                {/* Indicador visual de que tiene teléfono */}
                                                 {(r as any).telefono && <span className="ml-1 text-[8px] bg-green-100 text-green-600 px-1 rounded border border-green-200">📞</span>}
-                                                {/* Indicador visual de NOTIFICADO */}
                                                 {(r as any).notificado && <span className="ml-1 text-[8px] bg-blue-100 text-blue-600 px-1 rounded border border-blue-200" title="Cliente Notificado">✅</span>}
                                             </td>
                                             <td className="p-5 text-center"><input type="checkbox" checked={r.produccion} onChange={(e) => update(ref(db_realtime, `remitos/${id}`), { produccion: e.target.checked })} className="w-4 h-4 rounded border-slate-300 text-blue-600" /></td>
@@ -539,8 +478,7 @@ Saludos, *BIPOKIDS*.`;
                                             <td className="p-5 text-center"><button onClick={() => update(ref(db_realtime, `remitos/${id}`), { prioridad: !r.prioridad })} className={`text-lg transition-transform active:scale-90 ${r.prioridad ? 'grayscale-0' : 'grayscale opacity-20'}`}>🔥</button></td>
                                             <td className="p-5 text-center">
                                                 <select value={r.rangoDespacho || ""} onChange={(e) => handleRangoChange(id, r, e.target.value)} className="bg-white/50 border border-slate-300 rounded-xl p-2 text-[10px] font-black uppercase outline-none focus:bg-white">
-                                                    <option value="">-- SELECCIONAR --</option>
-                                                    {rangos.map(rng => <option key={rng} value={rng}>{rng}</option>)}
+                                                    <option value="">-- SELECCIONAR --</option>{rangos.map(rng => <option key={rng} value={rng}>{rng}</option>)}
                                                 </select>
                                             </td>
                                         </tr>
@@ -552,7 +490,6 @@ Saludos, *BIPOKIDS*.`;
                 </section>
             )}
 
-            {/* TABLA SEMANAL */}
             <h3 className="text-xl font-black italic uppercase mb-6 ml-4 text-gray-800 tracking-tighter">Cronograma Semanal</h3>
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-20">
                 {weekdays.map((dia) => (
@@ -578,12 +515,14 @@ Saludos, *BIPOKIDS*.`;
                                             );
                                         })}
                                         {Object.entries(soportes).filter(([,s]) => s.rangoEntrega === match && s.estado !== "Entregado").map(([id,s]) => (
-                                            <span key={id} onClick={() => setModalDetalle({ open: true, data: { ...s, id } })} className="px-3 py-2 rounded-xl text-[9px] font-black border-l-4 bg-orange-50 text-orange-700 border-orange-500 shadow-sm flex items-center gap-2 cursor-pointer hover:scale-105 transition-transform"><span>🛠️</span> {s.cliente}</span>
+                                            <span key={id} onClick={() => setModalDetalle({ open: true, data: { ...s, id } })} className="px-3 py-2 rounded-xl text-[9px] font-black border-l-4 bg-orange-50 text-orange-700 border-orange-500 shadow-sm flex items-center gap-2 cursor-pointer hover:scale-105 transition-transform">
+                                                <span>🛠️ {s.cliente}</span>
+                                                {(s as any).notificado && <span className="text-[8px] ml-1">✅</span>}
+                                            </span>
                                         ))}
                                         {tablaManual[`${diaFix}_${bloque}`] && Object.entries(tablaManual[`${diaFix}_${bloque}`]).map(([mId,m]:any) => (
                                             <span key={mId} className="px-3 py-2 rounded-xl text-[9px] font-black bg-amber-50 text-amber-700 border-l-4 border-amber-400 italic flex justify-between group">
-                                                {m.text}
-                                                <button onClick={(e) => {e.stopPropagation(); remove(ref(db_realtime, `tablaManual/${diaFix}_${bloque}/${mId}`));}} className="opacity-0 group-hover:opacity-100">✖</button>
+                                                {m.text}<button onClick={(e) => {e.stopPropagation(); remove(ref(db_realtime, `tablaManual/${diaFix}_${bloque}/${mId}`));}} className="opacity-0 group-hover:opacity-100">✖</button>
                                             </span>
                                         ))}
                                     </div>
@@ -594,12 +533,8 @@ Saludos, *BIPOKIDS*.`;
                 ))}
             </div>
 
-            {/* SECCIÓN ENTREGADOS */}
             <section>
-                <h3 className="text-xl font-black italic uppercase mb-6 ml-4 text-slate-400 flex items-center gap-2">
-                    <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                    Historial de Entregados (Remitos & Soportes)
-                </h3>
+                <h3 className="text-xl font-black italic uppercase mb-6 ml-4 text-slate-400 flex items-center gap-2"><span className="w-2 h-2 bg-green-500 rounded-full"></span> Historial de Entregados (Remitos & Soportes)</h3>
                 <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm">
                     {todosEntregados.length === 0 ? <p className="text-slate-400 text-sm italic text-center">No hay registros entregados aún.</p> : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -614,10 +549,7 @@ Saludos, *BIPOKIDS*.`;
                                         <p className="text-[9px] text-slate-400 mt-1 font-mono">{item.fechaEntrega ? item.fechaEntrega.split('T')[0] : 'Sin fecha'}</p>
                                         <p className="text-[10px] font-bold text-indigo-500 mt-1 flex items-center gap-1"><span>🚚</span> {item.chofer || 'Sin chofer asignado'}</p>
                                     </div>
-                                    <div className="flex gap-2">
-                                        <button onClick={() => setModalFirma({open: true, data: item, type: item._type})} className="p-2 bg-white rounded-lg shadow-sm hover:scale-110 transition-transform text-xl" title="Ver Firma">🖋️</button>
-                                        <button onClick={() => eliminarItem(item.id, item._type)} className="p-2 bg-red-50 text-red-600 rounded-lg shadow-sm hover:bg-red-100 transition-colors" title="Eliminar">✖</button>
-                                    </div>
+                                    <div className="flex gap-2"><button onClick={() => setModalFirma({open: true, data: item, type: item._type})} className="p-2 bg-white rounded-lg shadow-sm hover:scale-110 transition-transform text-xl" title="Ver Firma">🖋️</button><button onClick={() => eliminarItem(item.id, item._type)} className="p-2 bg-red-50 text-red-600 rounded-lg shadow-sm hover:bg-red-100 transition-colors" title="Eliminar">✖</button></div>
                                 </div>
                             ))}
                         </div>
@@ -625,10 +557,8 @@ Saludos, *BIPOKIDS*.`;
                 </div>
             </section>
 
-            {/* BOTÓN FLOTANTE */}
             <button onClick={() => setSidebarOpen(true)} className="fixed bottom-10 right-10 w-16 h-16 bg-blue-600 text-white rounded-full shadow-2xl flex items-center justify-center text-3xl font-bold z-50 hover:scale-110 active:scale-95 transition-all">+</button>
 
-            {/* MODALS */}
             {modalDetalle.open && modalDetalle.data && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" onClick={() => setModalDetalle({ open: false, data: null })}>
                     <div className="bg-white rounded-[2rem] p-8 w-full max-w-lg shadow-2xl animate-in fade-in zoom-in duration-300" onClick={e => e.stopPropagation()}>
@@ -641,23 +571,11 @@ Saludos, *BIPOKIDS*.`;
                                     ) : (
                                         <p className="text-orange-600 font-mono font-bold text-sm bg-orange-50 inline-block px-2 py-1 rounded-lg">Soporte #{modalDetalle.data.numeroSoporte}</p>
                                     )}
-
-                                    {/* STATUS NOTIFICADO EN DETALLE */}
-                                    {modalDetalle.data.numeroRemito && (
-                                        <span className={`px-2 py-1 rounded-lg text-xs font-bold border ${
-                                            modalDetalle.data.notificado 
-                                            ? "bg-green-100 text-green-700 border-green-200" 
-                                            : "bg-yellow-50 text-yellow-600 border-yellow-200"
-                                        }`}>
-                                            {modalDetalle.data.notificado ? "✅ Notificado" : "⚠️ No Notificado"}
-                                        </span>
-                                    )}
+                                    <span className={`px-2 py-1 rounded-lg text-xs font-bold border ${modalDetalle.data.notificado ? "bg-green-100 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-600 border-yellow-200"}`}>
+                                        {modalDetalle.data.notificado ? "✅ Notificado" : "⚠️ No Notificado"}
+                                    </span>
                                 </div>
-
-                                {/* Mostrar teléfono en detalle si existe */}
-                                {(modalDetalle.data as any).telefono && (
-                                    <p className="text-xs font-bold text-slate-500 mt-1">📞 {(modalDetalle.data as any).telefono}</p>
-                                )}
+                                {(modalDetalle.data as any).telefono && <p className="text-xs font-bold text-slate-500 mt-1">📞 {(modalDetalle.data as any).telefono}</p>}
                             </div>
                             <button onClick={() => setModalDetalle({ open: false, data: null })} className="text-slate-300 hover:text-slate-800 text-xl font-bold p-2">✕</button>
                         </div>
@@ -668,10 +586,7 @@ Saludos, *BIPOKIDS*.`;
                                     {modalDetalle.data.numeroRemito && Array.isArray(modalDetalle.data.articulos) && modalDetalle.data.articulos.map((art: any, i: number) => (
                                         <li key={i} className="text-sm font-bold text-slate-700 border-b border-slate-200 pb-2 last:border-0 last:pb-0 flex items-start gap-3">
                                             <span className="bg-white text-blue-600 border border-blue-100 px-2 py-0.5 rounded text-xs font-black min-w-[30px] text-center shadow-sm">{art.cantidad}</span>
-                                            <div className="flex-1">
-                                                <p>{art.codigo}</p>
-                                                {art.detalle && <p className="text-[11px] text-slate-400 italic font-normal mt-0.5">{art.detalle}</p>}
-                                            </div>
+                                            <div className="flex-1"><p>{art.codigo}</p>{art.detalle && <p className="text-[11px] text-slate-400 italic font-normal mt-0.5">{art.detalle}</p>}</div>
                                         </li>
                                     ))}
                                     {modalDetalle.data.numeroSoporte && Array.isArray(modalDetalle.data.productos) && modalDetalle.data.productos.map((prod: string, i: number) => (
@@ -679,184 +594,33 @@ Saludos, *BIPOKIDS*.`;
                                     ))}
                                 </ul>
                             </div>
-                            {modalDetalle.data.aclaraciones && (
-                                <div className="bg-amber-50 p-5 rounded-2xl border border-amber-100 text-amber-800">
-                                    <h4 className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-2 flex items-center gap-2"><span>📝</span> Observaciones</h4>
-                                    <p className="text-xs font-bold italic leading-relaxed whitespace-pre-line">{modalDetalle.data.aclaraciones}</p>
-                                </div>
-                            )}
+                            {modalDetalle.data.aclaraciones && (<div className="bg-amber-50 p-5 rounded-2xl border border-amber-100 text-amber-800"><h4 className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-2 flex items-center gap-2"><span>📝</span> Observaciones</h4><p className="text-xs font-bold italic leading-relaxed whitespace-pre-line">{modalDetalle.data.aclaraciones}</p></div>)}
                             <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
-                                    <p className="text-[9px] font-black text-slate-400 uppercase">Fecha</p>
-                                    <p className="text-xs font-bold text-slate-700">{modalDetalle.data.fechaEmision || modalDetalle.data.fechaSoporte || '-'}</p>
-                                </div>
-                                {modalDetalle.data.numeroRemito && (
-                                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
-                                        <p className="text-[9px] font-black text-slate-400 uppercase">Tipo</p>
-                                        <p className="text-xs font-bold text-slate-700">{modalDetalle.data.esTransporte ? '🚛 Transporte' : '🏠 Domicilio'}</p>
-                                    </div>
-                                )}
+                                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center"><p className="text-[9px] font-black text-slate-400 uppercase">Fecha</p><p className="text-xs font-bold text-slate-700">{modalDetalle.data.fechaEmision || modalDetalle.data.fechaSoporte || '-'}</p></div>
+                                {modalDetalle.data.numeroRemito && (<div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center"><p className="text-[9px] font-black text-slate-400 uppercase">Tipo</p><p className="text-xs font-bold text-slate-700">{modalDetalle.data.esTransporte ? '🚛 Transporte' : '🏠 Domicilio'}</p></div>)}
                             </div>
                         </div>
-
-                        {/* ACCIONES DEL MODAL DETALLE */}
                         <div className="mt-6 flex flex-col gap-3">
-                            
-                            {/* BOTÓN NOTIFICAR (Solo si tiene teléfono y es remito) */}
-                            {modalDetalle.data.numeroRemito && (modalDetalle.data as any).telefono && (
-                                <button 
-                                    onClick={notificarDesdeDetalle}
-                                    className={`w-full p-4 rounded-2xl font-black uppercase italic tracking-widest transition-all shadow-lg flex items-center justify-center gap-2 ${
-                                        modalDetalle.data.notificado
-                                        ? "bg-white text-green-600 border-2 border-green-500 hover:bg-green-50"
-                                        : "bg-green-500 text-white hover:bg-green-600"
-                                    }`}
-                                >
-                                    <span>💬</span> 
-                                    {modalDetalle.data.notificado ? "Re-enviar WhatsApp" : "Notificar por WhatsApp"}
+                            {(modalDetalle.data as any).telefono && (
+                                <button onClick={notificarDesdeDetalle} className={`w-full p-4 rounded-2xl font-black uppercase italic tracking-widest transition-all shadow-lg flex items-center justify-center gap-2 ${modalDetalle.data.notificado ? "bg-white text-green-600 border-2 border-green-500 hover:bg-green-50" : "bg-green-500 text-white hover:bg-green-600"}`}>
+                                    <span>💬</span> {modalDetalle.data.notificado ? "Re-enviar WhatsApp" : "Notificar por WhatsApp"}
                                 </button>
                             )}
-
-                            <button onClick={() => setModalDetalle({ open: false, data: null })} className="w-full p-4 bg-slate-900 text-white rounded-2xl font-black uppercase italic tracking-widest hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200">
-                                Cerrar
-                            </button>
+                            <button onClick={() => setModalDetalle({ open: false, data: null })} className="w-full p-4 bg-slate-900 text-white rounded-2xl font-black uppercase italic tracking-widest hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200">Cerrar</button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* MODAL WHATSAPP (NUEVO) */}
             {modalWhatsapp && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
                     <div className="bg-white rounded-[2rem] p-8 w-full max-w-sm shadow-2xl animate-in zoom-in duration-200">
-                        <div className="text-center mb-6">
-                            <span className="text-4xl">📱</span>
-                            <h3 className="text-xl font-black text-slate-800 mt-2">Notificar al Cliente</h3>
-                            <p className="text-sm text-slate-500 mt-1">Este remito tiene un teléfono asociado.</p>
-                        </div>
-                        
+                        <div className="text-center mb-6"><span className="text-4xl">📱</span><h3 className="text-xl font-black text-slate-800 mt-2">Notificar al Cliente</h3><p className="text-sm text-slate-500 mt-1">Este remito tiene un teléfono asociado.</p></div>
                         <div className="space-y-3">
-                            <button 
-                                onClick={() => confirmarAsignacion(true)}
-                                className="w-full p-4 bg-green-500 text-white rounded-xl font-bold shadow-lg hover:bg-green-600 transition-all flex items-center justify-center gap-2"
-                            >
-                                <span>💬</span> Asignar y Enviar WhatsApp
-                            </button>
-                            
-                            <button 
-                                onClick={() => confirmarAsignacion(false)}
-                                className="w-full p-4 bg-white text-slate-600 border border-slate-200 rounded-xl font-bold hover:bg-slate-50 transition-all"
-                            >
-                                Solo Asignar (Sin notificar)
-                            </button>
+                            <button onClick={() => confirmarAsignacion(true)} className="w-full p-4 bg-green-500 text-white rounded-xl font-bold shadow-lg hover:bg-green-600 transition-all flex items-center justify-center gap-2"><span>💬</span> Asignar y Enviar WhatsApp</button>
+                            <button onClick={() => confirmarAsignacion(false)} className="w-full p-4 bg-white text-slate-600 border border-slate-200 rounded-xl font-bold hover:bg-slate-50 transition-all">Solo Asignar (Sin notificar)</button>
                         </div>
-                        
-                        <button 
-                            onClick={() => setModalWhatsapp(null)}
-                            className="w-full mt-6 text-xs font-bold text-slate-400 uppercase hover:text-slate-600"
-                        >
-                            Cancelar
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* MODAL FIRMA */}
-            {modalFirma.open && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" onClick={() => setModalFirma({...modalFirma, open: false})}>
-                    <div className="bg-white rounded-[2rem] p-8 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
-                        <h3 className="text-xl font-black text-slate-800 uppercase italic mb-4 text-center">Comprobante de Entrega</h3>
-                        {modalFirma.data.clienteFirma ? (
-                            <div className="space-y-4">
-                                {/* Datos Recibió */}
-                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-center">
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Recibió</p>
-                                    <p className="font-black text-slate-800 uppercase text-lg">{modalFirma.data.clienteFirma.nombre}</p>
-                                    <p className="text-xs text-slate-500 font-bold">DNI: {modalFirma.data.clienteFirma.dni}</p>
-                                </div>
-                                
-                                {/* Firma */}
-                                <div className="border-2 border-dashed border-slate-200 rounded-2xl p-4 flex justify-center bg-white">
-                                    <img src={`data:image/png;base64,${modalFirma.data.clienteFirma.firma}`} className="max-h-40 object-contain" alt="Firma" />
-                                </div>
-
-                                {/* LISTA DE RECHAZOS */}
-                                {modalFirma.data.itemsRechazados && modalFirma.data.itemsRechazados.length > 0 && (
-                                    <div className="bg-red-50 p-4 rounded-2xl border border-red-100 text-center">
-                                        <p className="text-[10px] font-black text-red-400 uppercase tracking-widest mb-2 flex items-center justify-center gap-1">⚠️ Items No Recibidos</p>
-                                        <ul className="space-y-2">
-                                            {modalFirma.data.itemsRechazados.map((item: any, idx: number) => (
-                                                <li key={idx} className="text-xs font-bold text-red-700 flex justify-between border-b border-red-100 pb-1 last:border-0 last:pb-0">
-                                                    <span>{item.codigo}</span>
-                                                    <span>{item.cantidadRechazada} un.</span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )}
-
-                                {/* BOTÓN COPIAR IMAGEN */}
-                                <button 
-                                    onClick={generarImagenComprobante}
-                                    className="w-full py-3 bg-indigo-50 text-indigo-600 rounded-xl font-black uppercase text-xs hover:bg-indigo-100 transition-colors flex items-center justify-center gap-2 border border-indigo-100"
-                                >
-                                    📋 Copiar como Imagen
-                                </button>
-                            </div>
-                        ) : (
-                            <div className="p-10 text-center bg-slate-50 rounded-2xl text-slate-400 font-bold italic border border-slate-100"><p className="text-3xl mb-2">🤷‍♂️</p>Sin firma digital registrada.</div>
-                        )}
-                        <button onClick={() => setModalFirma({...modalFirma, open: false})} className="w-full mt-4 p-4 bg-slate-900 text-white rounded-2xl font-black uppercase italic tracking-widest hover:bg-slate-800 transition-colors">Cerrar</button>
-                    </div>
-                </div>
-            )}
-
-            {/* SIDEBAR DE CARGA */}
-            {sidebarOpen && (
-                <div className="fixed inset-0 z-[100] flex justify-end">
-                    <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
-                    <div className="relative w-full max-w-lg bg-white h-full shadow-2xl p-8 overflow-y-auto animate-in slide-in-from-right duration-300">
-                        {/* ... SIDEBAR CONTENT ... */}
-                        <div className="flex justify-between items-center mb-8">
-                            <h2 className="text-2xl font-black italic uppercase text-slate-800 tracking-tighter">Carga de Datos</h2>
-                            <button onClick={() => setSidebarOpen(false)} className="text-slate-300 hover:text-slate-800 text-xl font-bold">✕</button>
-                        </div>
-                        <div className="space-y-6">
-                            <div>
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-2">Tipo de carga</label>
-                                <select value={tipoCarga} onChange={(e) => setTipoCarga(e.target.value as any)} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold uppercase text-sm outline-none focus:border-blue-500 transition-all">
-                                    <option value="">-- Seleccionar --</option>
-                                    <option value="remito">Remito</option>
-                                    <option value="soporte">Soporte</option>
-                                </select>
-                            </div>
-                            {tipoCarga === 'remito' && (
-                                <div className="space-y-6 animate-in fade-in duration-500">
-                                    <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-2">Datos Remito y Cliente</label><textarea rows={6} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono" placeholder="Pega bloque completo aquí..." value={datosRemitoRaw} onChange={e => setDatosRemitoRaw(e.target.value)} /></div>
-                                    <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-2">Productos y Cantidades</label><textarea rows={4} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono" placeholder="Cantidad Código..." value={productosRaw} onChange={e => setProductosRaw(e.target.value)} /></div>
-                                    <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-2">Detalles / Aclaraciones</label><textarea rows={3} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono" placeholder="Ej: MPE 1200 ROJOS..." value={aclaracionesRaw} onChange={e => setAclaracionesRaw(e.target.value)} /></div>
-                                    <div className="grid grid-cols-1 gap-3">
-                                        <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border cursor-pointer border-slate-100 hover:border-blue-500 transition-all"><input type="checkbox" checked={esTransporte} onChange={e => setEsTransporte(e.target.checked)} className="w-5 h-5 rounded border-slate-300 text-blue-600" /><span className="text-[11px] font-black text-slate-600 uppercase italic">Es Transporte</span></label>
-                                        <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border cursor-pointer border-slate-100 hover:border-green-500 transition-all"><input type="checkbox" checked={necesitaProduccion} onChange={e => setNecesitaProduccion(e.target.checked)} className="w-5 h-5 rounded border-slate-300 text-green-600" /><span className="text-[11px] font-black text-slate-600 uppercase italic text-green-600">Requiere Producción</span></label>
-                                    </div>
-                                </div>
-                            )}
-                            {tipoCarga === 'soporte' && (
-                                <div className="space-y-4 animate-in fade-in duration-500">
-                                    <input type="text" placeholder="N° SOPORTE" className="w-full p-4 bg-slate-50 rounded-2xl font-bold uppercase text-sm border-slate-100" value={soporteData.numero} onChange={e => setSoporteData({...soporteData, numero: e.target.value})} />
-                                    <input type="text" placeholder="CLIENTE" className="w-full p-4 bg-slate-50 rounded-2xl font-bold uppercase text-sm border-slate-100" value={soporteData.cliente} onChange={e => setSoporteData({...soporteData, cliente: e.target.value})} />
-                                    
-                                    {/* --- NUEVO CAMPO DE TELÉFONO --- */}
-                                    <input type="text" placeholder="TELÉFONO (OPCIONAL)" className="w-full p-4 bg-slate-50 rounded-2xl font-bold uppercase text-sm border-slate-100" value={soporteData.telefono} onChange={e => setSoporteData({...soporteData, telefono: e.target.value})} />
-
-                                    <input type="date" className="w-full p-4 bg-slate-50 rounded-2xl font-bold text-sm border-slate-100 uppercase" value={soporteData.fecha} onChange={e => setSoporteData({...soporteData, fecha: e.target.value})} />
-                                    <textarea rows={5} placeholder="LISTA DE PRODUCTOS..." className="w-full p-4 bg-slate-50 rounded-2xl border-slate-100 font-bold uppercase text-sm" value={soporteData.productos} onChange={e => setSoporteData({...soporteData, productos: e.target.value})} />
-                                </div>
-                            )}
-                            {tipoCarga && (
-                                <button disabled={loading} onClick={guardarDatos} className="w-full mt-4 p-5 bg-slate-900 text-white rounded-[2rem] font-black uppercase italic tracking-widest shadow-xl hover:bg-blue-600 transition-all disabled:bg-slate-300">{loading ? 'Sincronizando...' : 'Confirmar Carga'}</button>
-                            )}
-                        </div>
+                        <button onClick={() => setModalWhatsapp(null)} className="w-full mt-6 text-xs font-bold text-slate-400 uppercase hover:text-slate-600">Cancelar</button>
                     </div>
                 </div>
             )}
@@ -864,15 +628,10 @@ Saludos, *BIPOKIDS*.`;
     );
 };
 
-// Componente StatCard
 function StatCard({ label, val, color, onClick, isActive }: { label: string, val: number, color: string, onClick?: () => void, isActive?: boolean }) {
     return (
-        <div 
-            onClick={onClick}
-            className={`bg-slate-50 p-3 rounded-xl border-l-4 ${color} transition-all hover:scale-105 ${onClick ? 'cursor-pointer hover:bg-slate-100' : ''} ${isActive ? 'ring-2 ring-indigo-500 bg-indigo-50' : ''}`}
-        >
-            <h2 className="text-[9px] font-bold text-slate-400 uppercase tracking-wide leading-none truncate">{label}</h2>
-            <p className="text-2xl font-black text-slate-800 mt-1 italic leading-none">{val}</p>
+        <div onClick={onClick} className={`bg-slate-50 p-3 rounded-xl border-l-4 ${color} transition-all hover:scale-105 ${onClick ? 'cursor-pointer hover:bg-slate-100' : ''} ${isActive ? 'ring-2 ring-indigo-500 bg-indigo-50' : ''}`}>
+            <h2 className="text-[9px] font-bold text-slate-400 uppercase tracking-wide leading-none truncate">{label}</h2><p className="text-2xl font-black text-slate-800 mt-1 italic leading-none">{val}</p>
         </div>
     );
 }
