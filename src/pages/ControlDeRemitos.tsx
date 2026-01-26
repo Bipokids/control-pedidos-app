@@ -810,8 +810,8 @@ const ControlDeRemitos: React.FC = () => {
                                     <label className="text-[10px] font-mono text-cyan-600 uppercase tracking-widest block mb-2">Protocolo de Carga</label>
                                     <select value={tipoCarga} onChange={(e) => setTipoCarga(e.target.value as any)} className="w-full p-4 bg-slate-900/50 border border-slate-700 rounded-xl font-bold font-mono uppercase text-sm text-cyan-100 outline-none focus:border-cyan-500 focus:shadow-[0_0_15px_rgba(6,182,212,0.2)] transition-all">
                                         <option value="">-- SELECCIONAR --</option>
-                                        <option value="remito">Logística (Remito)</option>
-                                        <option value="soporte">Técnico (Soporte)</option>
+                                        <option value="remito">Remito</option>
+                                        <option value="soporte">Soporte</option>
                                     </select>
                                 </div>
                                 {tipoCarga === 'remito' && (
