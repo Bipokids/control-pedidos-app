@@ -684,14 +684,14 @@ const ControlDeRemitos: React.FC = () => {
                                 
                                 {modalDetalle.data.aclaraciones && (
                                     <div className="bg-yellow-900/10 p-5 rounded-2xl border border-yellow-500/20 text-yellow-100">
-                                        <h4 className="text-[10px] font-black text-yellow-500 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">📝 Logs / Notes</h4>
+                                        <h4 className="text-[10px] font-black text-yellow-500 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">📝 Detalles</h4>
                                         <p className="text-xs font-mono leading-relaxed whitespace-pre-line text-yellow-200/80">{modalDetalle.data.aclaraciones}</p>
                                     </div>
                                 )}
                                 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="bg-slate-900 p-3 rounded-xl border border-slate-800 text-center">
-                                        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Timestamp</p>
+                                        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Fecha</p>
                                         <p className="text-xs font-bold text-cyan-400 font-mono mt-1">{modalDetalle.data.fechaEmision || modalDetalle.data.fechaSoporte || '-'}</p>
                                     </div>
                                     {modalDetalle.data.numeroRemito && (
