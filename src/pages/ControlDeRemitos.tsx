@@ -665,7 +665,7 @@ const ControlDeRemitos: React.FC = () => {
                             {/* BODY */}
                             <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
                                 <div className="bg-slate-900/50 p-5 rounded-2xl border border-slate-800">
-                                    <h4 className="text-[10px] font-black text-cyan-600 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">📦 Manifest Cargo</h4>
+                                    <h4 className="text-[10px] font-black text-cyan-600 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">📦 Detalle de envío</h4>
                                     <ul className="space-y-3">
                                         {modalDetalle.data.numeroRemito && Array.isArray(modalDetalle.data.articulos) && modalDetalle.data.articulos.map((art: any, i: number) => (
                                             <li key={i} className="text-sm font-bold text-slate-300 border-b border-slate-800 pb-2 last:border-0 last:pb-0 flex items-start gap-3 font-mono">
@@ -696,7 +696,7 @@ const ControlDeRemitos: React.FC = () => {
                                     </div>
                                     {modalDetalle.data.numeroRemito && (
                                         <div className="bg-slate-900 p-3 rounded-xl border border-slate-800 text-center">
-                                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Mode</p>
+                                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Modo</p>
                                             <p className="text-xs font-bold text-cyan-400 font-mono mt-1 uppercase">{modalDetalle.data.esTransporte ? '🚛 External' : '🏠 Local'}</p>
                                         </div>
                                     )}
@@ -715,12 +715,12 @@ const ControlDeRemitos: React.FC = () => {
                                         }`}
                                     >
                                         <span>💬</span> 
-                                        {modalDetalle.data.notificado ? "Resend Signal" : "Initialize Comm"}
+                                        {modalDetalle.data.notificado ? "Reenviar notificación" : "Initialize Comm"}
                                     </button>
                                 )}
 
                                 <button onClick={() => setModalDetalle({ open: false, data: null })} className="w-full p-4 bg-slate-800 text-slate-400 rounded-xl font-mono text-sm font-bold uppercase tracking-wider hover:bg-slate-700 hover:text-white transition-colors border border-slate-700">
-                                    Terminate
+                                    Cancelar
                                 </button>
                             </div>
                         </div>
@@ -733,7 +733,7 @@ const ControlDeRemitos: React.FC = () => {
                         <div className="bg-[#0f172a] rounded-[2rem] p-8 w-full max-w-sm shadow-[0_0_50px_rgba(16,185,129,0.2)] border border-emerald-900 animate-in zoom-in duration-200">
                             <div className="text-center mb-6">
                                 <span className="text-4xl drop-shadow-[0_0_10px_rgba(16,185,129,0.8)]">📡</span>
-                                <h3 className="text-xl font-black text-white mt-4 uppercase tracking-wider">Comm Link Detectado</h3>
+                                <h3 className="text-xl font-black text-white mt-4 uppercase tracking-wider">Contacto Detectado</h3>
                                 <p className="text-xs font-mono text-emerald-400 mt-2">Objetivo con protocolo de comunicación.</p>
                             </div>
                             
@@ -749,7 +749,7 @@ const ControlDeRemitos: React.FC = () => {
                                     onClick={() => confirmarAsignacion(false)}
                                     className="w-full p-4 bg-transparent text-slate-400 border border-slate-600 rounded-xl font-bold font-mono hover:border-slate-400 hover:text-white transition-all uppercase text-sm"
                                 >
-                                    Solo Asignar (Silent)
+                                    Solo Asignar 
                                 </button>
                             </div>
                             
@@ -757,7 +757,7 @@ const ControlDeRemitos: React.FC = () => {
                                 onClick={() => setModalWhatsapp(null)}
                                 className="w-full mt-6 text-xs font-bold font-mono text-slate-600 uppercase hover:text-red-400 transition-colors"
                             >
-                                Abortar
+                                Cancelar
                             </button>
                         </div>
                     </div>
