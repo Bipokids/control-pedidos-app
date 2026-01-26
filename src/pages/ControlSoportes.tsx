@@ -82,7 +82,8 @@ const ControlSoportes: React.FC<Props> = ({ onNavigate }) => {
         if (!modalWhatsapp) return;
         const { soporte, nuevoRango } = modalWhatsapp;
 
-        update(ref(db_realtime, `soportes/${soporte.id}`), { rangoEntrega: nuevoRango });
+        // 1. Creamos el objeto de actualización
+        const updates: any = { rangoEntrega: nuevoRango };
 
         if (enviarWhatsapp) {
             const telefonoStr = soporte.telefono ? String(soporte.telefono) : "";
@@ -111,10 +112,21 @@ const ControlSoportes: React.FC<Props> = ({ onNavigate }) => {
                 
                 const url = `https://web.whatsapp.com/send?phone=${telefonoFull}&text=${encodeURIComponent(mensaje)}`;
                 window.open(url, '_blank');
+                
+                // 2. Si se abre WhatsApp exitosamente, marcamos como notificado
+                updates.notificado = true;
             } else {
                 alert("Error: El teléfono no tiene un formato válido.");
+                updates.notificado = false;
             }
+        } else {
+            // 3. Si es asignación silenciosa, reseteamos el estado a false
+            updates.notificado = false;
         }
+
+        // 4. Actualizamos la base de datos con el rango Y el estado de notificación
+        update(ref(db_realtime, `soportes/${soporte.id}`), updates);
+
         setModalWhatsapp(null);
     };
 

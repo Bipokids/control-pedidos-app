@@ -684,7 +684,7 @@ const ControlDeRemitos: React.FC = () => {
                                                 ? "bg-emerald-900/30 text-emerald-400 border-emerald-500/50 shadow-[0_0_5px_#10b981]" 
                                                 : "bg-yellow-900/30 text-yellow-400 border-yellow-500/50"
                                             }`}>
-                                                {modalDetalle.data.notificado ? "SENT: TRUE" : "SENT: FALSE"}
+                                                {modalDetalle.data.notificado ? "NOTIFICADO" : "SIN NOTIFICAR"}
                                             </span>
                                         )}
                                     </div>
@@ -748,7 +748,7 @@ const ControlDeRemitos: React.FC = () => {
                                         }`}
                                     >
                                         <span>💬</span> 
-                                        {modalDetalle.data.notificado ? "Reenviar notificación" : "Initialize Comm"}
+                                        {modalDetalle.data.notificado ? "Reenviar notificación" : "Notificar"}
                                     </button>
                                 )}
 
