@@ -157,9 +157,9 @@ const AppContent = () => {
                     label="Soportes"
                     alertCount={retirosPendientes} 
                 />
-                <NavButton active={paginaActual === 'historial'} onClick={() => setPaginaActual('historial')} icon="🗂️" label="Archive" />
-                <NavButton active={paginaActual === 'pagos'} onClick={() => setPaginaActual('pagos')} icon="💰" label="Finance" />
-                <NavButton active={paginaActual === 'estadisticas'} onClick={() => setPaginaActual('estadisticas')} icon="📊" label="Metrics" />
+                <NavButton active={paginaActual === 'historial'} onClick={() => setPaginaActual('historial')} icon="🗂️" label="Despachos" />
+                <NavButton active={paginaActual === 'pagos'} onClick={() => setPaginaActual('pagos')} icon="💰" label="Pagos" />
+                <NavButton active={paginaActual === 'estadisticas'} onClick={() => setPaginaActual('estadisticas')} icon="📊" label="Métricas" />
             </>
             )}
 
@@ -169,23 +169,23 @@ const AppContent = () => {
             {/* 2. GRUPO OPERATIVO */}
             {role !== 'vendedor' && (
                 <>
-                    <NavButton active={paginaActual === 'contador'} onClick={() => setPaginaActual('contador')} icon="🔢" label="Monitor" />
-                    <NavButton active={paginaActual === 'produccion'} onClick={() => setPaginaActual('produccion')} icon="⚙️" label="Prod." />
+                    <NavButton active={paginaActual === 'contador'} onClick={() => setPaginaActual('contador')} icon="🔢" label="Contador" />
+                    <NavButton active={paginaActual === 'produccion'} onClick={() => setPaginaActual('produccion')} icon="⚙️" label="Producción" />
                     <NavButton active={paginaActual === 'gestion_soportes'} onClick={() => setPaginaActual('gestion_soportes')} icon="🔧" label="Taller" />
                 </>
             )}
 
             {/* 3. SOLO VENDEDOR */}
             {role === 'vendedor' && (
-                <NavButton active={paginaActual === 'devoluciones'} onClick={() => setPaginaActual('devoluciones')} icon="↩️" label="RMA" />
+                <NavButton active={paginaActual === 'devoluciones'} onClick={() => setPaginaActual('devoluciones')} icon="↩️" label="Devoluciones" />
             )}
 
             {/* 4. GRUPO INFERIOR (ADMIN) */}
             {role === 'admin' && (
             <>
                 <div className="w-12 h-[1px] bg-slate-800 my-2 shrink-0"></div>
-                <NavButton active={paginaActual === 'devoluciones'} onClick={() => setPaginaActual('devoluciones')} icon="↩️" label="RMA" />
-                <NavButton active={paginaActual === 'usuarios'} onClick={() => setPaginaActual('usuarios')} icon="👥" label="Users" />
+                <NavButton active={paginaActual === 'devoluciones'} onClick={() => setPaginaActual('devoluciones')} icon="↩️" label="Devoluciones" />
+                <NavButton active={paginaActual === 'usuarios'} onClick={() => setPaginaActual('usuarios')} icon="👥" label="Usuarios" />
             </>
             )}
 
