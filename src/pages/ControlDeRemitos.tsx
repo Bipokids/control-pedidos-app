@@ -5,10 +5,8 @@ import type { Remito, Soporte } from '../types';
 
 const ControlDeRemitos: React.FC = () => {
     // -------------------------------------------------------------------------
-    // 1. ESTADOS Y CONFIGURACIÓN (LÓGICA INTACTA)
+    // 1. ESTADOS Y CONFIGURACIÓN
     // -------------------------------------------------------------------------
-    
-    // Datos de Firebase
     const [remitos, setRemitos] = useState<Record<string, Remito>>({});
     const [soportes, setSoportes] = useState<Record<string, Soporte>>({});
     const [despachos, setDespachos] = useState<any>({});
@@ -26,17 +24,14 @@ const ControlDeRemitos: React.FC = () => {
     const [modalDetalle, setModalDetalle] = useState<{ open: boolean, data: any | null }>({ open: false, data: null });
     const [modalWhatsapp, setModalWhatsapp] = useState<{ open: boolean, remito: any, nuevoRango: string } | null>(null);
 
-    // Estados del Formulario (Sidebar)
+    // Estados del Formulario
     const [tipoCarga, setTipoCarga] = useState<'remito' | 'soporte' | ''>('');
-    
-    // -- Inputs Remito
     const [datosRemitoRaw, setDatosRemitoRaw] = useState('');
     const [productosRaw, setProductosRaw] = useState('');
     const [aclaracionesRaw, setAclaracionesRaw] = useState('');
     const [esTransporte, setEsTransporte] = useState(false);
     const [necesitaProduccion, setNecesitaProduccion] = useState(false);
 
-    // -- Inputs Soporte
     const [soporteData, setSoporteData] = useState({
         numero: '',
         cliente: '',
@@ -164,10 +159,11 @@ const ControlDeRemitos: React.FC = () => {
     const todosEntregados = [...entregadosRemitos, ...entregadosSoportes];
 
     // -------------------------------------------------------------------------
-    // 4. FUNCIONES AUXILIARES (HELPERS)
+    // 4. FUNCIONES AUXILIARES Y MANEJADORES
     // -------------------------------------------------------------------------
 
     const enviarMensajeWhatsapp = (data: any, rango: string) => {
+        // ... (Lógica de WhatsApp intacta)
         const telefonoStr = data.telefono ? String(data.telefono) : "";
         const telefonoLimpio = telefonoStr.replace(/\D/g, ''); 
         
@@ -209,22 +205,12 @@ const ControlDeRemitos: React.FC = () => {
         }
     };
 
-    const generarImagenComprobante = async () => {
-        // ... (Lógica de canvas intacta, omitida para brevedad visual pero se asume funcional igual que el original)
-        // Nota: Si necesitas el código del canvas completo aquí, avísame, pero no cambia en funcionalidad.
-        alert("Función de generar imagen se mantiene igual."); 
-    };
-
     const eliminarItem = (id: string, type: string) => {
         if(window.confirm("¿Eliminar este registro entregado permanentemente?")) {
             const path = type === 'remito' ? 'remitos' : 'soportes';
             remove(ref(db_realtime, `${path}/${id}`));
         }
     };
-
-    // -------------------------------------------------------------------------
-    // 5. MANEJADORES DE EVENTOS (HANDLERS)
-    // -------------------------------------------------------------------------
 
     const handleRangoChange = (remitoId: string, remitoData: any, nuevoRango: string) => {
         if (nuevoRango === "") {
@@ -280,6 +266,7 @@ const ControlDeRemitos: React.FC = () => {
     };
 
     const guardarDatos = async () => {
+        // ... (Lógica de guardado intacta)
         if (!tipoCarga) return;
         setLoading(true);
         try {
@@ -365,13 +352,11 @@ const ControlDeRemitos: React.FC = () => {
     };
 
     // -------------------------------------------------------------------------
-    // 6. RENDERIZADO (JSX) - ESTÉTICA FUTURISTA
+    // 6. RENDERIZADO (JSX) - ESTÉTICA FUTURISTA NEON
     // -------------------------------------------------------------------------
     return (
-        // FONDO GENERAL: Negro profundo con gradiente sutil y texto claro
         <div className="min-h-screen relative font-sans text-cyan-50 bg-[#050b14] selection:bg-cyan-500 selection:text-black pb-20 pt-10 px-4">
             
-            {/* GRID DE FONDO DECORATIVO (CSS EN LINEA PARA EFECTO) */}
             <div className="fixed inset-0 z-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, #1e293b 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
 
             <div className="max-w-[1400px] mx-auto relative z-10">
@@ -437,7 +422,7 @@ const ControlDeRemitos: React.FC = () => {
                         </div>
                         <input 
                             type="text" 
-                            placeholder="BUSCAR..." 
+                            placeholder="BUSCAR OBJETIVO..." 
                             value={filtro} 
                             onChange={(e) => setFiltro(e.target.value)} 
                             className="w-full pl-12 pr-6 py-4 bg-[#0f172a] border border-cyan-900 rounded-xl shadow-inner focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:shadow-[0_0_15px_rgba(6,182,212,0.3)] outline-none font-mono text-sm text-cyan-100 placeholder-cyan-900 transition-all uppercase tracking-wider" 
@@ -473,61 +458,65 @@ const ControlDeRemitos: React.FC = () => {
                                 <thead>
                                     <tr className="bg-slate-900/80 text-cyan-600 font-mono text-[10px] uppercase tracking-[0.2em] border-b border-cyan-900">
                                         <th className="p-5">ID Ref</th>
-                                        <th className="p-5">Cliente</th>
-                                        <th className="p-5 text-center">Producción</th>
+                                        <th className="p-5">Entidad / Cliente</th>
+                                        <th className="p-5 text-center">Prod.</th>
                                         <th className="p-5 text-center">Estado</th>
-                                        <th className="p-5 text-center">Preparación</th>
-                                        <th className="p-5 text-center">Prioridad</th>
+                                        <th className="p-5 text-center">Prep.</th>
+                                        <th className="p-5 text-center">Prio.</th>
                                         <th className="p-5 text-center">Asignación Temporal</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-cyan-900/30 font-mono text-xs">
                                     {remitosFiltrados.map(([id, r], index) => {
-                                        // Lógica de colores adaptada a modo oscuro/neon
+                                        // --- LÓGICA DE COLOR (HIGH CONTRAST) ---
                                         let bgClass = 'hover:bg-cyan-900/10 transition-colors bg-transparent';
                                         const sinRango = !r.rangoDespacho || r.rangoDespacho === "";
 
-                                        // Clases de fila basdas en estado (Transparencias con tinte)
-                                        if (r.estadoPreparacion === 'Despachado') bgClass = 'bg-cyan-900/20 text-cyan-200';
-                                        else {
-                                            if (r.produccion) {
-                                                if (r.estado === 'Listo') {
-                                                    if (sinRango) bgClass = 'bg-purple-900/20 text-purple-200 shadow-[inset_3px_0_0_#a855f7]';
-                                                    else if (r.estadoPreparacion === 'Listo') bgClass = 'bg-emerald-900/20 text-emerald-200 shadow-[inset_3px_0_0_#10b981]';
-                                                    else bgClass = 'bg-yellow-900/10 text-yellow-200';
-                                                }
+                                        // Prioridad: Rojo intenso
+                                        if (r.prioridad) {
+                                            bgClass = 'bg-red-900/20 text-red-200 border-l-4 border-red-500 shadow-[inset_0_0_15px_rgba(220,38,38,0.2)]';
+                                        } 
+                                        else if (r.estadoPreparacion === 'Despachado') {
+                                            bgClass = 'bg-cyan-900/30 text-cyan-200 border-l-4 border-cyan-500';
+                                        }
+                                        else if (r.produccion) {
+                                            if (r.estado === 'Listo') {
+                                                if (sinRango) bgClass = 'bg-purple-900/30 text-purple-200 border-l-4 border-purple-500';
+                                                else if (r.estadoPreparacion === 'Listo') bgClass = 'bg-emerald-900/30 text-emerald-200 border-l-4 border-emerald-500 shadow-[inset_0_0_15px_rgba(16,185,129,0.1)]';
+                                                else bgClass = 'bg-yellow-900/20 text-yellow-200 border-l-4 border-yellow-500';
                                             } else {
-                                                if (r.estadoPreparacion === 'Pendiente' && sinRango) bgClass = 'bg-purple-900/10 text-purple-200';
-                                                else if (r.estadoPreparacion === 'Listo') bgClass = 'bg-emerald-900/20 text-emerald-200 shadow-[inset_3px_0_0_#10b981]';
+                                                // En Producción (Pendiente)
+                                                bgClass = 'bg-orange-900/10 text-orange-200 hover:bg-orange-900/20';
                                             }
+                                        } else {
+                                            // Sin Producción
+                                            if (r.estadoPreparacion === 'Pendiente' && sinRango) bgClass = 'bg-purple-900/20 text-purple-200 border-l-4 border-purple-500';
+                                            else if (r.estadoPreparacion === 'Listo') bgClass = 'bg-emerald-900/30 text-emerald-200 border-l-4 border-emerald-500 shadow-[inset_0_0_15px_rgba(16,185,129,0.1)]';
                                         }
                                         
-                                        // Efecto de prioridad
-                                        const borderClass = r.prioridad ? 'border-l-2 border-red-500 bg-red-900/10' : '';
-
                                         return (
-                                            <tr key={id} className={`group ${bgClass} ${borderClass}`}>
-                                                <td className="p-5 cursor-pointer text-cyan-400 group-hover:text-cyan-200 group-hover:shadow-[0_0_10px_cyan] transition-all duration-300" onClick={() => setModalDetalle({ open: true, data: { ...r, id } })} title="Ver detalle">
+                                            <tr key={id} className={`group ${bgClass}`}>
+                                                <td className="p-5 cursor-pointer text-cyan-400 font-bold group-hover:text-cyan-200 group-hover:shadow-[0_0_10px_cyan] transition-all duration-300" onClick={() => setModalDetalle({ open: true, data: { ...r, id } })} title="Ver detalle">
                                                     <span className="opacity-50 mr-1">#</span>{r.numeroRemito}
                                                 </td>
-                                                <td className="p-5 font-sans font-bold uppercase tracking-wide text-slate-300">
+                                                <td className="p-5 font-sans font-bold uppercase tracking-wide text-white">
                                                     {r.cliente}
-                                                    {/* Indicadores neon */}
-                                                    {(r as any).telefono && <span className="ml-2 text-[10px] inline-block align-middle shadow-[0_0_5px_#10b981] bg-emerald-500/20 text-emerald-400 px-1.5 rounded border border-emerald-500/50">📞 LINK</span>}
-                                                    {(r as any).notificado && <span className="ml-2 text-[10px] inline-block align-middle shadow-[0_0_5px_#3b82f6] bg-blue-500/20 text-blue-400 px-1.5 rounded border border-blue-500/50">DATA SENT</span>}
+                                                    {/* Indicadores neon intensos */}
+                                                    {(r as any).telefono && <span className="ml-2 text-[10px] inline-block align-middle shadow-[0_0_5px_#10b981] bg-emerald-600 text-black px-1.5 rounded font-black border border-emerald-400">📞</span>}
+                                                    {(r as any).notificado && <span className="ml-2 text-[10px] inline-block align-middle shadow-[0_0_5px_#3b82f6] bg-blue-600 text-white px-1.5 rounded font-black border border-blue-400">✓ SENT</span>}
                                                 </td>
                                                 <td className="p-5 text-center"><input type="checkbox" checked={r.produccion} onChange={(e) => update(ref(db_realtime, `remitos/${id}`), { produccion: e.target.checked })} className="w-4 h-4 rounded bg-slate-800 border-slate-600 text-cyan-600 focus:ring-cyan-500 focus:ring-offset-slate-900" /></td>
                                                 <td className="p-5 text-center">
-                                                    {r.produccion && <span className={`px-3 py-1 rounded-sm text-[10px] font-black uppercase tracking-wider border ${r.estado === 'Listo' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.3)]' : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/50'}`}>{r.estado || 'PENDIENTE'}</span>}
+                                                    {r.produccion && <span className={`px-3 py-1 rounded-sm text-[10px] font-black uppercase tracking-wider border ${r.estado === 'Listo' ? 'bg-emerald-600 text-black border-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-yellow-600/80 text-black border-yellow-400'}`}>{r.estado || 'PENDING'}</span>}
                                                 </td>
                                                 <td className="p-5 text-center">
-                                                    <span className={`px-3 py-1 rounded-sm text-[10px] font-black uppercase tracking-wider border bg-slate-800/50 border-slate-600 text-slate-400`}>{r.estadoPreparacion || 'PENDIENTE'}</span>
+                                                    <span className={`px-3 py-1 rounded-sm text-[10px] font-black uppercase tracking-wider border ${r.estadoPreparacion === 'Listo' ? 'bg-emerald-600 text-black border-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-slate-800 text-slate-400 border-slate-600'}`}>{r.estadoPreparacion || 'PENDING'}</span>
                                                 </td>
                                                 <td className="p-5 text-center">
-                                                    <button onClick={() => update(ref(db_realtime, `remitos/${id}`), { prioridad: !r.prioridad })} className={`text-lg transition-all active:scale-90 hover:scale-110 ${r.prioridad ? 'grayscale-0 drop-shadow-[0_0_8px_red]' : 'grayscale opacity-20'}`}>🔥</button>
+                                                    <button onClick={() => update(ref(db_realtime, `remitos/${id}`), { prioridad: !r.prioridad })} className={`text-lg transition-all active:scale-90 hover:scale-110 ${r.prioridad ? 'grayscale-0 drop-shadow-[0_0_8px_red] animate-pulse' : 'grayscale opacity-20'}`}>🔥</button>
                                                 </td>
                                                 <td className="p-5 text-center">
-                                                    <select value={r.rangoDespacho || ""} onChange={(e) => handleRangoChange(id, r, e.target.value)} className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-[10px] font-mono text-cyan-300 uppercase outline-none focus:border-cyan-500 focus:shadow-[0_0_10px_rgba(6,182,212,0.3)] w-full max-w-[140px]">
+                                                    <select value={r.rangoDespacho || ""} onChange={(e) => handleRangoChange(id, r, e.target.value)} className="bg-slate-900 border border-slate-600 rounded-lg px-2 py-1 text-[10px] font-mono text-cyan-300 uppercase outline-none focus:border-cyan-500 focus:shadow-[0_0_10px_rgba(6,182,212,0.3)] w-full max-w-[140px]">
                                                         <option value="">-- NULL --</option>
                                                         {rangos.map(rng => <option key={rng} value={rng}>{rng}</option>)}
                                                     </select>
@@ -559,32 +548,40 @@ const ControlDeRemitos: React.FC = () => {
                                         <p className="text-[9px] font-bold text-slate-600 uppercase mb-3 tracking-widest text-center">{bloque}</p>
                                         <div className="flex flex-col gap-2">
                                             
-                                            {/* REMITOS ITEMS */}
+                                            {/* REMITOS ITEMS (COLORES INTENSOS) */}
                                             {Object.entries(remitos).filter(([,r]) => r.rangoDespacho === match && r.estadoPreparacion !== "Entregado").map(([id,r]) => {
-                                                let bgChip = 'bg-orange-900/30 text-orange-300 border-orange-500/40 hover:shadow-[0_0_10px_orange]';
-                                                if (r.estadoPreparacion === 'Listo') bgChip = 'bg-emerald-900/30 text-emerald-300 border-emerald-500/40 hover:shadow-[0_0_10px_#10b981]';
-                                                if (r.estadoPreparacion === 'Despachado') bgChip = 'bg-cyan-900/30 text-cyan-300 border-cyan-500/40 hover:shadow-[0_0_10px_cyan]';
-                                                if (r.prioridad) bgChip = 'bg-red-900/30 text-red-300 border-red-500/40 animate-pulse';
+                                                // Default: Naranja oscuro
+                                                let bgChip = 'bg-orange-900/60 text-orange-200 border-l-4 border-orange-500 hover:shadow-[0_0_10px_orange]';
+                                                
+                                                if (r.estadoPreparacion === 'Listo') {
+                                                    bgChip = 'bg-emerald-900/60 text-emerald-100 border-l-4 border-emerald-500 hover:shadow-[0_0_10px_#10b981]';
+                                                }
+                                                if (r.estadoPreparacion === 'Despachado') {
+                                                    bgChip = 'bg-cyan-900/60 text-cyan-100 border-l-4 border-cyan-500 hover:shadow-[0_0_10px_cyan]';
+                                                }
+                                                if (r.prioridad) {
+                                                    bgChip = 'bg-red-900/60 text-red-100 border-l-4 border-red-500 shadow-[0_0_10px_rgba(220,38,38,0.4)] animate-pulse';
+                                                }
                                                 
                                                 return (
-                                                    <span key={id} onClick={() => setModalDetalle({ open: true, data: { ...r, id } })} className={`px-2 py-2 rounded border-l-2 cursor-pointer transition-all ${bgChip} flex justify-between items-center group/item`}>
+                                                    <span key={id} onClick={() => setModalDetalle({ open: true, data: { ...r, id } })} className={`px-2 py-2 rounded-r cursor-pointer transition-all ${bgChip} flex justify-between items-center group/item border-y border-r border-white/10`}>
                                                         <span className="truncate max-w-[90%] text-[10px] font-mono font-bold">{r.cliente}</span>
-                                                        {(r as any).notificado && <span className="text-[8px] ml-1 text-cyan-400 drop-shadow-[0_0_2px_cyan]">✓</span>}
+                                                        {(r as any).notificado && <span className="text-[10px] ml-1 text-cyan-300 drop-shadow-[0_0_2px_cyan]">✓</span>}
                                                     </span>
                                                 );
                                             })}
 
-                                            {/* SOPORTES ITEMS */}
+                                            {/* SOPORTES ITEMS (VIOLETA INTENSO) */}
                                             {Object.entries(soportes).filter(([,s]) => s.rangoEntrega === match && s.estado !== "Entregado").map(([id,s]) => (
-                                                <span key={id} onClick={() => setModalDetalle({ open: true, data: { ...s, id } })} className="px-2 py-2 rounded border-l-2 bg-violet-900/30 text-violet-300 border-violet-500/40 cursor-pointer hover:shadow-[0_0_10px_#8b5cf6] transition-all flex items-center gap-2">
+                                                <span key={id} onClick={() => setModalDetalle({ open: true, data: { ...s, id } })} className="px-2 py-2 rounded-r border-l-4 bg-violet-900/60 text-violet-100 border-violet-500 cursor-pointer hover:shadow-[0_0_10px_#8b5cf6] transition-all flex items-center gap-2 border-y border-r border-white/10">
                                                     <span className="text-[10px] font-mono font-bold truncate">🛠️ {s.cliente}</span>
-                                                    {(s as any).notificado && <span className="text-[8px] ml-1 text-cyan-400">✓</span>}
+                                                    {(s as any).notificado && <span className="text-[10px] ml-1 text-cyan-300">✓</span>}
                                                 </span>
                                             ))}
 
-                                            {/* MANUALES */}
+                                            {/* MANUALES (AMARILLO INTENSO) */}
                                             {tablaManual[`${diaFix}_${bloque}`] && Object.entries(tablaManual[`${diaFix}_${bloque}`]).map(([mId,m]:any) => (
-                                                <span key={mId} className="px-2 py-2 rounded border-l-2 text-[10px] font-mono bg-yellow-900/20 text-yellow-200 border-yellow-500/40 flex justify-between group/manual">
+                                                <span key={mId} className="px-2 py-2 rounded-r border-l-4 text-[10px] font-mono bg-yellow-900/60 text-yellow-100 border-yellow-500 flex justify-between group/manual border-y border-r border-white/10">
                                                     {m.text}
                                                     <button onClick={(e) => {e.stopPropagation(); remove(ref(db_realtime, `tablaManual/${diaFix}_${bloque}/${mId}`));}} className="opacity-0 group-hover/manual:opacity-100 text-red-400 font-bold hover:text-red-200">X</button>
                                                 </span>
@@ -601,7 +598,7 @@ const ControlDeRemitos: React.FC = () => {
                 <section>
                     <h3 className="text-xl font-black italic uppercase mb-6 text-slate-500 flex items-center gap-2 tracking-tighter">
                         <span className="w-2 h-2 bg-emerald-500 rounded-full shadow-[0_0_10px_#10b981]"></span>
-                        REMITOS ENTREGADOS
+                        Historial de Operaciones
                     </h3>
                     <div className="bg-[#0f172a]/40 backdrop-blur-md rounded-[2.5rem] p-8 border border-slate-800 shadow-xl">
                         {todosEntregados.length === 0 ? <p className="text-slate-600 text-sm font-mono italic text-center">Sin datos en el archivo.</p> : (
@@ -631,11 +628,10 @@ const ControlDeRemitos: React.FC = () => {
                 {/* FAB (Floating Action Button) */}
                 <button onClick={() => setSidebarOpen(true)} className="fixed bottom-10 right-10 w-16 h-16 bg-cyan-600 text-white rounded-full shadow-[0_0_30px_rgba(8,145,178,0.6)] flex items-center justify-center text-3xl font-bold z-50 hover:scale-110 active:scale-95 transition-all border border-cyan-400 hover:bg-cyan-400 hover:text-black hover:rotate-90 duration-300">+</button>
 
-                {/* MODAL DETALLE */}
+                {/* MODAL DETALLE (Estilo Neon Oscuro) */}
                 {modalDetalle.open && modalDetalle.data && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md" onClick={() => setModalDetalle({ open: false, data: null })}>
                         <div className="bg-[#0f172a] rounded-[2rem] p-8 w-full max-w-lg shadow-[0_0_50px_rgba(6,182,212,0.2)] border border-cyan-500/30 animate-in fade-in zoom-in duration-300 relative overflow-hidden" onClick={e => e.stopPropagation()}>
-                            {/* Decorative line */}
                             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500 to-purple-600"></div>
 
                             {/* HEADER */}
@@ -781,8 +777,8 @@ const ControlDeRemitos: React.FC = () => {
                                     <label className="text-[10px] font-mono text-cyan-600 uppercase tracking-widest block mb-2">Protocolo de Carga</label>
                                     <select value={tipoCarga} onChange={(e) => setTipoCarga(e.target.value as any)} className="w-full p-4 bg-slate-900/50 border border-slate-700 rounded-xl font-bold font-mono uppercase text-sm text-cyan-100 outline-none focus:border-cyan-500 focus:shadow-[0_0_15px_rgba(6,182,212,0.2)] transition-all">
                                         <option value="">-- SELECCIONAR --</option>
-                                        <option value="remito">Remito</option>
-                                        <option value="soporte">Soporte</option>
+                                        <option value="remito">Logística (Remito)</option>
+                                        <option value="soporte">Técnico (Soporte)</option>
                                     </select>
                                 </div>
                                 {tipoCarga === 'remito' && (
