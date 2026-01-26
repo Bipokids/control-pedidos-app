@@ -19,21 +19,16 @@ const GestionSoportes: React.FC = () => {
         return () => unsubscribe();
     }, []);
 
-    // --- LÓGICA DE FILTRADO (Idéntica a tu HTML) ---
+    // --- LÓGICA DE FILTRADO ---
     const soportesFiltrados = Object.entries(soportes).filter(([_id, s]) => {
-        // 1. Filtro Texto (Cliente o Número)
         const matchTexto = !filtro || 
                            (s.cliente || '').toLowerCase().includes(filtro.toLowerCase()) || 
                            (s.numeroSoporte || '').toString().includes(filtro);
-        
-        // 2. Filtro Estado
         const matchEstado = !filtroEstado || s.estado === filtroEstado;
-        
-        // 3. Excluir Entregados (siempre)
         return matchTexto && matchEstado && s.estado !== "Entregado";
     });
 
-    // --- ACCIONES DE BASE DE DATOS ---
+    // --- ACCIONES ---
     const marcarListo = (id: string) => {
         if(window.confirm("¿Confirmar que el soporte está listo para entregar?")) {
             update(ref(db_realtime, `soportes/${id}`), { 
@@ -53,174 +48,188 @@ const GestionSoportes: React.FC = () => {
 
     // --- HELPERS VISUALES ---
     const renderProductos = (prods: string[] | string | undefined) => {
-        if (!prods) return <span className="text-gray-400 italic">-</span>;
-        if (Array.isArray(prods)) return prods.map((p, i) => <li key={i}>{p}</li>);
-        if (typeof prods === 'string') return prods.split(/\r?\n/).map((p, i) => <li key={i}>{p}</li>);
-        return <li>{prods}</li>;
+        if (!prods) return <span className="text-slate-600 italic font-mono">-</span>;
+        if (Array.isArray(prods)) return prods.map((p, i) => <li key={i} className="flex gap-2"><span className="text-violet-500">›</span> {p}</li>);
+        if (typeof prods === 'string') return prods.split(/\r?\n/).map((p, i) => <li key={i} className="flex gap-2"><span className="text-violet-500">›</span> {p}</li>);
+        return <li className="flex gap-2"><span className="text-violet-500">›</span> {prods}</li>;
     };
 
     const getBadgeColor = (estado: string) => {
         switch(estado) {
-            case 'Resuelto': return 'bg-purple-100 text-purple-700 border-purple-200'; // --chip-r
-            case 'En progreso': return 'bg-blue-100 text-blue-700 border-blue-200';   // --chip-e
-            default: return 'bg-yellow-100 text-yellow-700 border-yellow-200';        // --chip-p
+            case 'Resuelto': return 'bg-emerald-900/40 text-emerald-400 border-emerald-500/50 shadow-[0_0_10px_#10b981]'; 
+            case 'En progreso': return 'bg-blue-900/40 text-blue-400 border-blue-500/50 shadow-[0_0_10px_#3b82f6]'; 
+            default: return 'bg-yellow-900/30 text-yellow-400 border-yellow-500/40'; // Pendiente
         }
     };
 
     return (
-        <div className="max-w-[1600px] mx-auto p-6 font-sans min-h-screen bg-gray-50">
+        <div className="min-h-screen relative font-sans text-cyan-50 bg-[#050b14] selection:bg-violet-500 selection:text-black pb-20 pt-10 px-4">
             
-            {/* ENCABEZADO UNIFICADO */}
-            <header className="mb-10 flex flex-col xl:flex-row justify-between items-end gap-6">
-                <div>
-                    <h1 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">
-                        Gestión <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-red-600">Técnica</span>
-                    </h1>
-                    <p className="text-slate-500 font-medium text-sm">Seguimiento y resolución de soportes.</p>
-                </div>
+            {/* GRID DE FONDO DECORATIVO */}
+            <div className="fixed inset-0 z-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, #1e293b 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
 
-                <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto">
-                    {/* Buscador Moderno */}
-                    <div className="relative flex-1 min-w-[280px]">
-                        <span className="absolute left-4 top-3.5 text-slate-400">🔍</span>
-                        <input 
-                            type="text" 
-                            placeholder="Buscar cliente, n°..." 
-                            value={filtro}
-                            onChange={(e) => setFiltro(e.target.value)}
-                            className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md focus:shadow-lg focus:border-orange-400 outline-none transition-all font-bold text-sm text-slate-600 placeholder:text-slate-300"
-                        />
+            <div className="max-w-[1600px] mx-auto relative z-10">
+                
+                {/* ENCABEZADO UNIFICADO */}
+                <header className="mb-10 flex flex-col xl:flex-row justify-between items-end gap-6 border-b border-violet-900/50 pb-6">
+                    <div>
+                        <h1 className="text-4xl font-black text-white tracking-tighter mb-2 uppercase drop-shadow-[0_0_10px_rgba(139,92,246,0.5)]">
+                            GESTIÓN <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-fuchsia-500">TÉCNICA</span>
+                        </h1>
+                        <p className="text-violet-500 font-mono text-xs uppercase tracking-[0.3em]">Resolución y Seguimiento de Casos</p>
                     </div>
 
-                    {/* Selector de Estado Estilizado */}
-                    <div className="relative min-w-[200px]">
-                        <span className="absolute left-4 top-3.5 text-slate-400">📂</span>
-                        <select 
-                            value={filtroEstado}
-                            onChange={(e) => setFiltroEstado(e.target.value)}
-                            className="w-full pl-11 pr-10 py-3 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md focus:shadow-lg focus:border-orange-400 outline-none transition-all font-bold text-sm text-slate-600 appearance-none cursor-pointer"
-                        >
-                            <option value="">Todos los Estados</option>
-                            <option value="Pendiente">Pendiente</option>
-                            <option value="En progreso">En progreso</option>
-                            <option value="Resuelto">Resuelto</option>
-                        </select>
-                        {/* Flecha personalizada para reemplazar la del navegador */}
-                        <span className="absolute right-4 top-4 text-slate-400 text-xs pointer-events-none">▼</span>
-                    </div>
-                </div>
-            </header>
-
-            {/* CONTADOR */}
-            <div className="text-xs text-gray-500 font-medium mb-4 text-right px-2">
-                {soportesFiltrados.length} soporte(s) · {new Date().toLocaleDateString()}
-            </div>
-
-            {/* GRID DE TARJETAS */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {soportesFiltrados.length === 0 ? (
-                    <div className="col-span-full py-10 text-center text-gray-400 bg-white rounded-xl border border-gray-200 border-dashed">
-                        Sin resultados
-                    </div>
-                ) : (
-                    soportesFiltrados.map(([id, s]) => (
-                        <div key={id} className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:-translate-y-1 hover:shadow-md transition-all">
-                            {/* Cabecera Tarjeta */}
-                            <div className="flex justify-between items-start mb-2">
-                                <div>
-                                    <strong className="text-gray-800">Soporte #{s.numeroSoporte}</strong>
-                                    <div className="text-[10px] text-gray-400 font-mono mt-0.5">ID: {id.slice(-6)}</div>
-                                </div>
-                                <span className={`px-3 py-1 rounded-full text-[11px] font-bold border ${getBadgeColor(s.estado)}`}>
-                                    {s.estado}
-                                </span>
-                            </div>
-
-                            {/* Datos Principales */}
-                            <div className="space-y-3 mt-4 text-sm">
-                                <div className="grid grid-cols-[80px_1fr] items-center">
-                                    <span className="font-bold text-gray-700">Cliente</span>
-                                    <span className="text-gray-900 uppercase">{s.cliente}</span>
-                                </div>
-                                <div className="grid grid-cols-[80px_1fr] items-center">
-                                    <span className="font-bold text-gray-700">Fecha</span>
-                                    <span className="text-gray-600">{s.fechaSoporte}</span>
-                                </div>
-                                <div className="grid grid-cols-[80px_1fr] items-start">
-                                    <span className="font-bold text-gray-700 mt-0.5">Productos</span>
-                                    <ul className="text-gray-600 list-disc list-inside text-xs leading-relaxed">
-                                        {renderProductos(s.productos)}
-                                    </ul>
-                                </div>
-                                
-                                {/* Campo Trabajo / Descripción */}
-                                <div className="grid grid-cols-[80px_1fr] items-start">
-                                    <span className="font-bold text-gray-700 mt-0.5">Trabajo</span>
-                                    <div className="bg-gray-50 p-2 rounded-lg border border-gray-100 text-xs text-gray-600 min-h-[40px] italic">
-                                        {s.descripcion || "Sin descripción..."}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Acciones */}
-                            <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-100">
-                                <button 
-                                    onClick={() => { setEditData({ id, descripcion: s.descripcion || '', numero: s.numeroSoporte }); setModalOpen(true); }}
-                                    className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 text-xs font-bold hover:bg-gray-200 transition-colors"
-                                >
-                                    ✏️ Editar
-                                </button>
-                                
-                                {s.estado !== 'Resuelto' && (
-                                    <button 
-                                        onClick={() => marcarListo(id)}
-                                        className="px-4 py-2 rounded-lg bg-green-600 text-white text-xs font-bold hover:bg-green-700 transition-colors shadow-sm"
-                                    >
-                                        ✅ Listo
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    ))
-                )}
-            </div>
-
-            {/* MODAL (HTML dialog style replica) */}
-            {modalOpen && editData && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setModalOpen(false)}>
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
-                        <div className="p-5 border-b border-gray-100">
-                            <h3 className="font-bold text-lg text-gray-800">Editar soporte #{editData.numero}</h3>
-                        </div>
-                        
-                        <div className="p-6">
-                            <label className="block text-sm font-bold text-gray-700 mb-2">Descripción trabajo</label>
-                            <textarea 
-                                className="w-full h-32 p-3 border border-gray-300 rounded-lg text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none resize-none"
-                                placeholder="Trabajo realizado..."
-                                value={editData.descripcion}
-                                onChange={(e) => setEditData({...editData, descripcion: e.target.value})}
-                                autoFocus
+                    <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto">
+                        {/* Buscador Moderno */}
+                        <div className="relative flex-1 min-w-[280px] group">
+                            <span className="absolute left-4 top-4 text-violet-700 group-focus-within:text-violet-400 transition-colors">🔍</span>
+                            <input 
+                                type="text" 
+                                placeholder="BUSCAR..." 
+                                value={filtro}
+                                onChange={(e) => setFiltro(e.target.value)}
+                                className="w-full pl-12 pr-4 py-4 bg-[#0f172a] border border-violet-900 rounded-xl shadow-inner focus:border-violet-500 focus:ring-1 focus:ring-violet-500 focus:shadow-[0_0_15px_rgba(139,92,246,0.3)] outline-none font-mono text-sm text-violet-100 placeholder-violet-900 transition-all uppercase tracking-wider"
                             />
                         </div>
 
-                        <div className="p-4 bg-gray-50 flex justify-end gap-3 border-t border-gray-100">
-                            <button 
-                                onClick={() => setModalOpen(false)}
-                                className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50"
+                        {/* Selector de Estado Estilizado */}
+                        <div className="relative min-w-[200px] group">
+                            <span className="absolute left-4 top-4 text-violet-700 group-focus-within:text-violet-400 transition-colors">📂</span>
+                            <select 
+                                value={filtroEstado}
+                                onChange={(e) => setFiltroEstado(e.target.value)}
+                                className="w-full pl-12 pr-10 py-4 bg-[#0f172a] border border-violet-900 rounded-xl shadow-inner focus:border-violet-500 focus:ring-1 focus:ring-violet-500 focus:shadow-[0_0_15px_rgba(139,92,246,0.3)] outline-none transition-all font-mono font-bold text-xs uppercase text-violet-200 appearance-none cursor-pointer"
                             >
-                                Cancelar
-                            </button>
-                            <button 
-                                onClick={guardarDescripcion}
-                                className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 shadow-sm"
-                            >
-                                Guardar
-                            </button>
+                                <option value="">TODOS LOS ESTADOS</option>
+                                <option value="Pendiente">Pendiente</option>
+                                <option value="En progreso">En progreso</option>
+                                <option value="Resuelto">Resuelto</option>
+                            </select>
+                            <span className="absolute right-4 top-4 text-violet-800 text-xs pointer-events-none">▼</span>
                         </div>
                     </div>
+                </header>
+
+                {/* CONTADOR */}
+                <div className="text-xs text-violet-400 font-mono font-medium mb-6 text-right px-2 flex justify-end items-center gap-2">
+                    <span className="w-2 h-2 bg-violet-500 rounded-full animate-pulse"></span>
+                    {soportesFiltrados.length} SOPORTE(S) · {new Date().toLocaleDateString()}
                 </div>
-            )}
+
+                {/* GRID DE TARJETAS */}
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {soportesFiltrados.length === 0 ? (
+                        <div className="col-span-full py-20 text-center text-slate-600 font-mono font-bold italic text-sm border-2 border-dashed border-slate-800 rounded-2xl bg-[#0f172a]/50">
+                            :: NO DATA FOUND ::
+                        </div>
+                    ) : (
+                        soportesFiltrados.map(([id, s]) => (
+                            <div key={id} className="bg-[#0f172a]/60 backdrop-blur-md border border-slate-800 rounded-[2rem] p-6 shadow-lg hover:border-violet-500/30 hover:shadow-[0_0_20px_rgba(139,92,246,0.1)] transition-all group relative overflow-hidden">
+                                
+                                {/* Decorative line */}
+                                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-500 to-fuchsia-600 opacity-50"></div>
+
+                                {/* Cabecera Tarjeta */}
+                                <div className="flex justify-between items-start mb-6">
+                                    <div>
+                                        <strong className="text-white text-lg font-black italic tracking-wide block">#{s.numeroSoporte}</strong>
+                                        <div className="text-[10px] text-slate-500 font-mono mt-1">UUID: {id.slice(-6)}</div>
+                                    </div>
+                                    <span className={`px-3 py-1 rounded text-[9px] font-black uppercase tracking-widest border font-mono ${getBadgeColor(s.estado)}`}>
+                                        {s.estado}
+                                    </span>
+                                </div>
+
+                                {/* Datos Principales */}
+                                <div className="space-y-4 text-sm bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                                    <div className="grid grid-cols-[80px_1fr] items-center">
+                                        <span className="font-bold text-violet-400 font-mono text-xs uppercase tracking-wider">Cliente</span>
+                                        <span className="text-white font-bold uppercase truncate">{s.cliente}</span>
+                                    </div>
+                                    <div className="grid grid-cols-[80px_1fr] items-center">
+                                        <span className="font-bold text-violet-400 font-mono text-xs uppercase tracking-wider">Fecha</span>
+                                        <span className="text-slate-400 font-mono text-xs">{s.fechaSoporte}</span>
+                                    </div>
+                                    <div className="grid grid-cols-[80px_1fr] items-start border-t border-slate-800 pt-3 mt-3">
+                                        <span className="font-bold text-violet-400 font-mono text-xs uppercase tracking-wider mt-0.5">Items</span>
+                                        <ul className="text-slate-300 text-xs leading-relaxed font-mono">
+                                            {renderProductos(s.productos)}
+                                        </ul>
+                                    </div>
+                                </div>
+                                
+                                {/* Campo Trabajo / Descripción */}
+                                <div className="mt-4">
+                                    <span className="font-bold text-violet-400 font-mono text-xs uppercase tracking-wider block mb-2">TRABAJO REALIZADO</span>
+                                    <div className="bg-black/40 p-3 rounded-xl border border-slate-700/50 text-xs text-slate-400 min-h-[50px] italic font-mono leading-relaxed">
+                                        {s.descripcion ? `> ${s.descripcion}` : "> Sin descripción..."}
+                                    </div>
+                                </div>
+
+                                {/* Acciones */}
+                                <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-800">
+                                    <button 
+                                        onClick={() => { setEditData({ id, descripcion: s.descripcion || '', numero: s.numeroSoporte }); setModalOpen(true); }}
+                                        className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-[10px] font-black uppercase tracking-wider hover:bg-white hover:text-black transition-all border border-slate-700 font-mono"
+                                    >
+                                        ✏️ EDITAR
+                                    </button>
+                                    
+                                    {s.estado !== 'Resuelto' && (
+                                        <button 
+                                            onClick={() => marcarListo(id)}
+                                            className="px-4 py-2 rounded-xl bg-emerald-600 text-black text-[10px] font-black uppercase tracking-wider hover:bg-emerald-400 hover:shadow-[0_0_15px_#10b981] transition-all font-mono"
+                                        >
+                                            ✅ LISTO
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+
+                {/* MODAL EDITAR */}
+                {modalOpen && editData && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md" onClick={() => setModalOpen(false)}>
+                        <div className="bg-[#0f172a] rounded-[2rem] shadow-[0_0_50px_rgba(139,92,246,0.2)] w-full max-w-md overflow-hidden animate-in zoom-in duration-200 border border-violet-900/50" onClick={e => e.stopPropagation()}>
+                            
+                            {/* Decorative Top */}
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-600 to-indigo-600"></div>
+
+                            <div className="p-6 border-b border-slate-800">
+                                <h3 className="font-black text-xl text-white uppercase italic tracking-tighter">Edit Ticket #{editData.numero}</h3>
+                            </div>
+                            
+                            <div className="p-6">
+                                <label className="block text-[10px] font-bold text-violet-400 mb-2 uppercase tracking-widest font-mono">Work Description / Log</label>
+                                <textarea 
+                                    className="w-full h-32 p-4 bg-black border border-slate-700 rounded-xl text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none resize-none text-slate-300 font-mono placeholder-slate-700"
+                                    placeholder="> Input technical details..."
+                                    value={editData.descripcion}
+                                    onChange={(e) => setEditData({...editData, descripcion: e.target.value})}
+                                    autoFocus
+                                />
+                            </div>
+
+                            <div className="p-6 bg-slate-900/50 flex justify-end gap-3 border-t border-slate-800">
+                                <button 
+                                    onClick={() => setModalOpen(false)}
+                                    className="px-6 py-3 rounded-xl border border-slate-600 bg-transparent text-slate-400 text-xs font-bold uppercase tracking-widest hover:text-white hover:border-slate-400 transition-all font-mono"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    onClick={guardarDescripcion}
+                                    className="px-6 py-3 rounded-xl bg-violet-600 text-white text-xs font-black uppercase tracking-widest hover:bg-violet-500 hover:shadow-[0_0_20px_rgba(139,92,246,0.4)] transition-all font-mono"
+                                >
+                                    Save Log
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

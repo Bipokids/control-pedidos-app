@@ -46,7 +46,6 @@ const Pagos: React.FC = () => {
     const marcarRegistrado = async (id: string) => {
         if (window.confirm("¿Confirmar que este pago ha sido ingresado en caja?")) {
             try {
-                // Al usar 'update', los campos estadoControl y sobreCerrado SE MANTIENEN en la base de datos
                 await update(ref(db_realtime, `soportesypagos/${id}`), {
                     estado: "Registrado",
                     fechaRegistro: new Date().toISOString()
@@ -58,7 +57,7 @@ const Pagos: React.FC = () => {
     };
 
     const eliminarPago = async (id: string) => {
-        if (window.confirm("⚠️ ¿Estás seguro de ELIMINAR este registro de pago permanentemente?")) {
+        if (window.confirm("⚠️ PROTOCOLO DE ELIMINACIÓN: ¿Estás seguro de borrar este registro financiero?")) {
             try {
                 await remove(ref(db_realtime, `soportesypagos/${id}`));
             } catch (error) {
@@ -72,175 +71,184 @@ const Pagos: React.FC = () => {
         return `$ ${val}`;
     };
 
-    if (loading) return <div className="p-10 text-center text-slate-400 font-bold animate-pulse">Cargando Pagos...</div>;
+    if (loading) return <div className="min-h-screen bg-[#050b14] flex items-center justify-center"><div className="text-cyan-500 font-mono animate-pulse">SYNCING FINANCIAL DATA...</div></div>;
 
     return (
-        <div className="max-w-7xl mx-auto px-4 py-10 font-sans min-h-screen bg-slate-50">
+        <div className="min-h-screen relative font-sans text-cyan-50 bg-[#050b14] selection:bg-emerald-500 selection:text-black pb-20 pt-10 px-4">
             
-            {/* ENCABEZADO CON FILTROS */}
-            <header className="mb-10 flex flex-col xl:flex-row justify-between items-end gap-6">
-                <div>
-                    <h1 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">
-                        Control <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-green-600">Pagos</span>
-                    </h1>
-                    <p className="text-slate-500 font-medium text-sm">Rendición de cobranzas de choferes.</p>
-                </div>
+            {/* GRID DE FONDO DECORATIVO */}
+            <div className="fixed inset-0 z-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, #1e293b 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
 
-                <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto">
-                    
-                    {/* Buscador Cliente */}
-                    <div className="relative flex-1 min-w-[250px]">
-                        <span className="absolute left-4 top-3.5 text-slate-400">🔍</span>
-                        <input 
-                            type="text" 
-                            placeholder="Buscar cliente..." 
-                            value={filtroCliente}
-                            onChange={(e) => setFiltroCliente(e.target.value)}
-                            className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md focus:shadow-lg focus:border-emerald-400 outline-none transition-all font-bold text-sm text-slate-600 placeholder:text-slate-300"
-                        />
+            <div className="max-w-7xl mx-auto relative z-10">
+                
+                {/* ENCABEZADO CON FILTROS */}
+                <header className="mb-12 flex flex-col xl:flex-row justify-between items-end gap-6 border-b border-emerald-900/50 pb-6">
+                    <div>
+                        <h1 className="text-4xl font-black text-white tracking-tighter mb-2 uppercase drop-shadow-[0_0_10px_rgba(16,185,129,0.3)]">
+                            FINANCE <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-500">CONTROL</span>
+                        </h1>
+                        <p className="text-emerald-600 font-mono text-xs uppercase tracking-[0.3em]">Módulo de Rendición de Valores</p>
                     </div>
 
-                    {/* Selector Fecha */}
-                    <div className="relative min-w-[200px]">
-                        <span className="absolute left-4 top-3.5 text-slate-400">📅</span>
-                        <select 
-                            value={filtroFecha}
-                            onChange={(e) => setFiltroFecha(e.target.value)}
-                            className="w-full pl-11 pr-10 py-3 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md focus:shadow-lg focus:border-emerald-400 outline-none transition-all font-bold text-sm text-slate-600 appearance-none cursor-pointer"
-                        >
-                            <option value="">Todas las Fechas</option>
-                            {fechasDisponibles.map(date => (
-                                <option key={date} value={date}>{date}</option>
-                            ))}
-                        </select>
-                        <span className="absolute right-4 top-4 text-slate-400 text-xs pointer-events-none">▼</span>
-                    </div>
-
-                    {/* KPI Rápido */}
-                    <div className="hidden xl:flex bg-white px-5 py-2 rounded-2xl border border-slate-100 shadow-sm items-center gap-3">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total</span>
-                        <span className="text-2xl font-black text-slate-800">{pagosFiltrados.length}</span>
-                    </div>
-                </div>
-            </header>
-
-            {/* GRILLA DE PAGOS FILTRADOS */}
-            {pagosFiltrados.length === 0 ? (
-                <div className="text-center py-20 bg-white rounded-[2.5rem] border border-dashed border-slate-200">
-                    <p className="text-4xl mb-4">💰</p>
-                    <p className="text-slate-400 font-bold text-lg">No se encontraron pagos con ese criterio</p>
-                </div>
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {pagosFiltrados.map((pago) => {
-                        const esRegistrado = pago.estado === "Registrado";
-                        const estadoControl = pago.estadoControl || "A Controlar"; 
-                        const esControlado = estadoControl === "Controlado";
-                        const sobreCerrado = pago.sobreCerrado || false;
+                    <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto">
                         
-                        return (
-                            <div 
-                                key={pago.id} 
-                                className={`p-6 rounded-[2rem] shadow-lg border flex flex-col transition-all duration-300 ${
-                                    esRegistrado 
-                                        ? 'bg-slate-100 border-slate-200 opacity-80' 
-                                        : 'bg-white border-slate-100 shadow-emerald-100/50 hover:-translate-y-1 hover:shadow-xl'
-                                }`}
+                        {/* Buscador Cliente */}
+                        <div className="relative flex-1 min-w-[250px] group">
+                            <span className="absolute left-4 top-4 text-emerald-700 group-focus-within:text-emerald-400 transition-colors">🔍</span>
+                            <input 
+                                type="text" 
+                                placeholder="BUSCAR CLIENTE..." 
+                                value={filtroCliente}
+                                onChange={(e) => setFiltroCliente(e.target.value)}
+                                className="w-full pl-12 pr-4 py-4 bg-[#0f172a] border border-emerald-900 rounded-xl shadow-inner focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:shadow-[0_0_15px_rgba(16,185,129,0.3)] outline-none font-mono text-sm text-emerald-100 placeholder-emerald-900 transition-all uppercase tracking-wider"
+                            />
+                        </div>
+
+                        {/* Selector Fecha */}
+                        <div className="relative min-w-[200px] group">
+                            <span className="absolute left-4 top-4 text-emerald-700 group-focus-within:text-emerald-400 transition-colors">📅</span>
+                            <select 
+                                value={filtroFecha}
+                                onChange={(e) => setFiltroFecha(e.target.value)}
+                                className="w-full pl-12 pr-10 py-4 bg-[#0f172a] border border-emerald-900 rounded-xl shadow-inner focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:shadow-[0_0_15px_rgba(16,185,129,0.3)] outline-none transition-all font-mono font-bold text-xs uppercase text-emerald-200 appearance-none cursor-pointer"
                             >
-                                {/* Header Tarjeta */}
-                                <div className="flex justify-between items-start mb-4 border-b border-dashed border-slate-200 pb-4">
-                                    <div>
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</p>
-                                            {/* Badge Sobre Cerrado (Visible SIEMPRE si es true) */}
-                                            {sobreCerrado && (
-                                                <span className="bg-amber-100 text-amber-600 px-2 py-0.5 rounded text-[9px] font-black uppercase flex items-center gap-1 border border-amber-200">
-                                                    ✉️ Sobre Cerrado
+                                <option value="">Todas las Fechas</option>
+                                {fechasDisponibles.map(date => (
+                                    <option key={date} value={date}>{date}</option>
+                                ))}
+                            </select>
+                            <span className="absolute right-4 top-4 text-emerald-800 text-xs pointer-events-none">▼</span>
+                        </div>
+
+                        {/* KPI Rápido */}
+                        <div className="hidden xl:flex bg-emerald-900/10 px-6 py-4 rounded-xl border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.1)] items-center gap-4">
+                            <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest font-mono">Total</span>
+                            <span className="text-2xl font-black text-white font-mono">{pagosFiltrados.filter(p => p.estado !== "Registrado").length}</span>
+                        </div>
+                    </div>
+                </header>
+
+                {/* GRILLA DE PAGOS FILTRADOS */}
+                {pagosFiltrados.length === 0 ? (
+                    <div className="text-center py-20 bg-[#0f172a]/50 rounded-[2.5rem] border border-dashed border-emerald-900/50">
+                        <p className="text-4xl mb-4 grayscale opacity-50">💰</p>
+                        <p className="text-emerald-700 font-mono font-bold text-sm tracking-widest uppercase">:: NO FINANCIAL DATA FOUND ::</p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {pagosFiltrados.map((pago) => {
+                            const esRegistrado = pago.estado === "Registrado";
+                            const estadoControl = pago.estadoControl || "A Controlar"; 
+                            const esControlado = estadoControl === "Controlado";
+                            const sobreCerrado = pago.sobreCerrado || false;
+                            
+                            return (
+                                <div 
+                                    key={pago.id} 
+                                    className={`p-6 rounded-[2rem] border flex flex-col transition-all duration-300 relative overflow-hidden group ${
+                                        esRegistrado 
+                                            ? 'bg-[#0f172a]/30 border-slate-800 opacity-60 hover:opacity-100 grayscale-[0.8] hover:grayscale-0' 
+                                            : 'bg-[#0f172a]/80 border-emerald-900/50 shadow-[0_0_20px_rgba(16,185,129,0.1)] hover:border-emerald-500/50 hover:shadow-[0_0_30px_rgba(16,185,129,0.2)] hover:-translate-y-1'
+                                    }`}
+                                >
+                                    {/* Decorative Line */}
+                                    <div className={`absolute top-0 left-0 w-full h-1 ${esRegistrado ? 'bg-slate-700' : 'bg-gradient-to-r from-emerald-500 to-teal-400'}`}></div>
+
+                                    {/* Header Tarjeta */}
+                                    <div className="flex justify-between items-start mb-6 border-b border-emerald-900/30 pb-4">
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest font-mono">Entidad</p>
+                                                {/* Badge Sobre Cerrado */}
+                                                {sobreCerrado && (
+                                                    <span className="bg-amber-900/30 text-amber-400 px-2 py-0.5 rounded text-[9px] font-black uppercase flex items-center gap-1 border border-amber-500/50 shadow-[0_0_5px_rgba(251,191,36,0.2)] animate-pulse">
+                                                        ✉️ SOBRE CERRADO
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <h3 className="text-lg font-black text-white uppercase leading-tight truncate max-w-[180px] tracking-wide" title={pago.cliente}>
+                                                {pago.cliente}
+                                            </h3>
+                                        </div>
+                                        <div className="text-right flex flex-col gap-2 items-end">
+                                            {esRegistrado ? (
+                                                <span className="bg-slate-800 text-slate-400 px-3 py-1 rounded text-[10px] font-black uppercase tracking-wide font-mono border border-slate-700">
+                                                    REGISTRADO
+                                                </span>
+                                            ) : (
+                                                <span className="bg-emerald-900/40 text-emerald-400 px-3 py-1 rounded text-[10px] font-black uppercase tracking-wide font-mono border border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.3)] animate-pulse">
+                                                    NEW INPUT
                                                 </span>
                                             )}
+                                            
+                                            {/* Badge Estado Control */}
+                                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border font-mono ${
+                                                esControlado 
+                                                    ? 'bg-blue-900/30 text-blue-400 border-blue-500/30' 
+                                                    : 'bg-yellow-900/20 text-yellow-500 border-yellow-500/30'
+                                            }`}>
+                                                {estadoControl}
+                                            </span>
                                         </div>
-                                        <h3 className="text-lg font-black text-slate-800 uppercase leading-tight truncate max-w-[180px]" title={pago.cliente}>
-                                            {pago.cliente}
-                                        </h3>
                                     </div>
-                                    <div className="text-right flex flex-col gap-1 items-end">
-                                        {esRegistrado ? (
-                                            <span className="bg-slate-200 text-slate-500 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wide">
-                                                Registrado
-                                            </span>
-                                        ) : (
-                                            <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wide animate-pulse">
-                                                Nuevo
-                                            </span>
+
+                                    {/* Detalles Financieros (Digital Display Look) */}
+                                    <div className="space-y-3 flex-1 mb-6">
+                                        {/* Efectivo */}
+                                        <div className="flex justify-between items-center bg-[#050b14] p-4 rounded-xl border border-emerald-900/50 shadow-inner">
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-lg grayscale brightness-150">💵</span>
+                                                <span className="text-[10px] font-bold text-emerald-600 uppercase font-mono tracking-widest">EFECTIVO</span>
+                                            </div>
+                                            <span className="text-lg font-black text-emerald-400 font-mono drop-shadow-[0_0_5px_rgba(52,211,153,0.5)]">{formatMoney(pago.montoEfectivo)}</span>
+                                        </div>
+
+                                        {/* Cheques */}
+                                        <div className="flex justify-between items-center bg-[#050b14] p-4 rounded-xl border border-cyan-900/50 shadow-inner">
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-lg grayscale brightness-150">🏦</span>
+                                                <span className="text-[10px] font-bold text-cyan-600 uppercase font-mono tracking-widest">CHEQUES</span>
+                                            </div>
+                                            <span className="text-lg font-black text-cyan-400 font-mono drop-shadow-[0_0_5px_rgba(34,211,238,0.5)]">{formatMoney(pago.montoCheque)}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Info Extra */}
+                                    <div className="flex justify-between items-center mb-6 text-xs text-slate-500 font-mono uppercase">
+                                        <span className="flex items-center gap-1 text-slate-400"><span className="text-emerald-700">CHOFER:</span> {pago.chofer}</span>
+                                        <span className="text-emerald-800">{pago.fecha}</span>
+                                    </div>
+
+                                    {/* Botones de Acción */}
+                                    <div className="flex gap-3 mt-auto">
+                                        {!esRegistrado && (
+                                            <button 
+                                                onClick={() => marcarRegistrado(pago.id)}
+                                                className="flex-1 py-3 bg-emerald-600 text-black rounded-xl font-black font-mono uppercase text-[10px] tracking-widest hover:bg-emerald-400 transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:shadow-[0_0_25px_rgba(16,185,129,0.5)] active:scale-95"
+                                            >
+                                                ✅ Confirm Deposit
+                                            </button>
                                         )}
                                         
-                                        {/* Badge Estado Control (VISIBLE SIEMPRE) */}
-                                        <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border ${
-                                            esControlado 
-                                                ? 'bg-blue-50 text-blue-600 border-blue-100' 
-                                                : 'bg-yellow-50 text-yellow-600 border-yellow-100'
-                                        } ${esRegistrado ? 'opacity-70' : ''}`}>
-                                            {estadoControl}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                {/* Detalles Financieros */}
-                                <div className="space-y-3 flex-1 mb-6">
-                                    {/* Efectivo */}
-                                    <div className="flex justify-between items-center bg-green-50/50 p-3 rounded-xl border border-green-50">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-xl">💵</span>
-                                            <span className="text-xs font-bold text-green-800 uppercase">Efectivo</span>
-                                        </div>
-                                        <span className="text-lg font-black text-green-700">{formatMoney(pago.montoEfectivo)}</span>
-                                    </div>
-
-                                    {/* Cheques */}
-                                    <div className="flex justify-between items-center bg-blue-50/50 p-3 rounded-xl border border-blue-50">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-xl">🏦</span>
-                                            <span className="text-xs font-bold text-blue-800 uppercase">Cheques</span>
-                                        </div>
-                                        <span className="text-lg font-black text-blue-700">{formatMoney(pago.montoCheque)}</span>
-                                    </div>
-                                </div>
-
-                                {/* Info Extra */}
-                                <div className="flex justify-between items-center mb-6 text-xs text-slate-400 font-bold">
-                                    <span className="flex items-center gap-1">🚚 {pago.chofer}</span>
-                                    <span className="font-mono">{pago.fecha}</span>
-                                </div>
-
-                                {/* Botones de Acción */}
-                                <div className="flex gap-3 mt-auto">
-                                    {!esRegistrado && (
                                         <button 
-                                            onClick={() => marcarRegistrado(pago.id)}
-                                            className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-emerald-600 transition-colors shadow-lg active:scale-95"
+                                            onClick={() => eliminarPago(pago.id)}
+                                            className={`py-3 px-4 border rounded-xl font-black uppercase text-[10px] transition-all font-mono ${
+                                                esRegistrado 
+                                                    ? 'w-full bg-transparent border-red-900/50 text-red-500 hover:bg-red-900/20' 
+                                                    : 'bg-transparent border-slate-700 text-slate-500 hover:text-red-400 hover:border-red-900'
+                                            }`}
+                                            title="Eliminar registro"
                                         >
-                                            ✅ Registrar en Caja
+                                            🗑️ {esRegistrado && "ELIMINAR"}
                                         </button>
-                                    )}
-                                    
-                                    <button 
-                                        onClick={() => eliminarPago(pago.id)}
-                                        className={`py-3 px-4 border rounded-xl font-black uppercase text-[10px] transition-colors ${
-                                            esRegistrado 
-                                                ? 'w-full bg-white border-red-200 text-red-500 hover:bg-red-50' 
-                                                : 'bg-white border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-200'
-                                        }`}
-                                        title="Eliminar registro"
-                                    >
-                                        🗑️ {esRegistrado && "Eliminar"}
-                                    </button>
-                                </div>
+                                    </div>
 
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

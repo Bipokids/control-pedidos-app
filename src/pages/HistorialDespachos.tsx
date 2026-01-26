@@ -6,7 +6,7 @@ import { ref, onValue, remove } from "firebase/database";
 interface DespachoItem {
     id: string;
     tipo: 'remito' | 'soporte';
-    fecha: string; // La fecha del grupo (nodo padre)
+    fecha: string; 
     cliente: string;
     numero: string;
     
@@ -14,16 +14,16 @@ interface DespachoItem {
     chofer?: string;
     responsable?: string;
     despacharConFaltante?: boolean;
-    productosMap?: Record<string, number>; // Lo que se llevó
-    esperadosMap?: Record<string, number>; // Lo que debía llevar
-    itemsRechazados?: { codigo: string; cantidadRechazada: number }[]; // Nuevo campo
-    estado?: string; // Nuevo campo (ej: Entregado Parcial)
+    productosMap?: Record<string, number>;
+    esperadosMap?: Record<string, number>;
+    itemsRechazados?: { codigo: string; cantidadRechazada: number }[];
+    estado?: string;
     imagenUrl?: string;
 
     // Específico Soporte
     fechaSoporte?: string;
     estadoSoporte?: string;
-    productosLista?: string[]; // Lista de items/descripción
+    productosLista?: string[];
 }
 
 const HistorialDespachos: React.FC = () => {
@@ -57,13 +57,12 @@ const HistorialDespachos: React.FC = () => {
                             despacharConFaltante: item.despacharConFaltante,
                             productosMap: item.productos || {},
                             esperadosMap: item.productosEsperados || {},
-                            itemsRechazados: item.itemsRechazados || [], // Mapeamos rechazos
-                            estado: item.estado, // Mapeamos estado explícito
+                            itemsRechazados: item.itemsRechazados || [],
+                            estado: item.estado,
                             imagenUrl: item.imagenUrl
                         });
                     } else {
-                        // Es Soporte
-                        // Normalizar productos
+                        // Es Soporte - Normalizar productos
                         let prods: string[] = [];
                         if (Array.isArray(item.productos)) prods = item.productos;
                         else if (typeof item.productos === 'string') prods = [item.productos];
@@ -88,7 +87,6 @@ const HistorialDespachos: React.FC = () => {
             });
 
             setHistorial(agrupado);
-            // Expandir la primera fecha por defecto
             if (Object.keys(agrupado).length > 0 && fechasExpandidas.size === 0) {
                 setFechasExpandidas(new Set([Object.keys(agrupado)[0]]));
             }
@@ -97,7 +95,6 @@ const HistorialDespachos: React.FC = () => {
         return () => unsubscribe();
     }, []);
 
-    // --- MANEJO UI ---
     const toggleFecha = (fecha: string) => {
         const nuevas = new Set(fechasExpandidas);
         if (nuevas.has(fecha)) nuevas.delete(fecha);
@@ -106,23 +103,23 @@ const HistorialDespachos: React.FC = () => {
     };
 
     const eliminarItem = (fecha: string, id: string) => {
-        if (window.confirm("¿Seguro que deseas eliminar este registro del historial?")) {
+        if (window.confirm("⚠️ PROTOCOLO DE BORRADO: ¿Confirmar eliminación permanente del registro?")) {
             remove(ref(db_realtime, `despachos/${fecha}/${id}`));
         }
     };
 
-    // --- LÓGICA DE ESTADO ---
+    // --- LÓGICA DE ESTADO (COLORES NEON) ---
     const getEstadoRemito = (item: DespachoItem) => {
-        // Prioridad 1: Estado explícito que viene de la app del chofer
+        // Prioridad 1: Estado explícito
         if (item.estado === "Entregado Parcial") {
-            return { texto: "⚠️ Entrega Parcial", color: "bg-red-100 text-red-700 border-red-200" };
+            return { texto: "⚠️ PARCIAL", color: "bg-orange-900/30 text-orange-400 border-orange-500/50 shadow-[0_0_10px_orange]" };
         }
         if (item.estado === "Rechazado") {
-            return { texto: "❌ Rechazado Total", color: "bg-red-200 text-red-800 border-red-300" };
+            return { texto: "❌ RECHAZADO", color: "bg-red-900/30 text-red-400 border-red-500/50 shadow-[0_0_10px_red]" };
         }
 
-        // Prioridad 2: Cálculo manual (Legacy o fallback)
-        if (!item.esperadosMap) return { texto: "📦 Despachado", color: "bg-blue-100 text-blue-700" };
+        // Prioridad 2: Cálculo manual
+        if (!item.esperadosMap) return { texto: "📦 DESPACHADO", color: "bg-cyan-900/30 text-cyan-400 border-cyan-500/50" };
 
         let hayFaltantes = false;
         Object.entries(item.esperadosMap).forEach(([prod, cantEsperada]) => {
@@ -130,172 +127,180 @@ const HistorialDespachos: React.FC = () => {
             if (cantReal < cantEsperada) hayFaltantes = true;
         });
 
-        if (!hayFaltantes) return { texto: "✅ Entregado Completo", color: "bg-green-100 text-green-700 border-green-200" };
-        if (item.despacharConFaltante) return { texto: "⚠️ Con Faltantes (Autorizado)", color: "bg-yellow-100 text-yellow-700 border-yellow-200" };
+        if (!hayFaltantes) return { texto: "✅ COMPLETO", color: "bg-emerald-900/30 text-emerald-400 border-emerald-500/50 shadow-[0_0_10px_#10b981]" };
+        if (item.despacharConFaltante) return { texto: "⚠️ FALTANTE AUTH", color: "bg-yellow-900/30 text-yellow-400 border-yellow-500/50" };
         
-        return { texto: "📦 Despachado", color: "bg-blue-100 text-blue-700 border-blue-200" };
+        return { texto: "📦 DESPACHADO", color: "bg-cyan-900/30 text-cyan-400 border-cyan-500/50" };
     };
 
     return (
-        <div className="max-w-5xl mx-auto px-4 py-8 font-sans min-h-screen bg-slate-50">
+        <div className="min-h-screen relative font-sans text-cyan-50 bg-[#050b14] selection:bg-cyan-500 selection:text-black pb-20 pt-10 px-4">
             
-            {/* ENCABEZADO UNIFICADO */}
-            <header className="mb-12 flex flex-col md:flex-row justify-between items-end gap-6">
-                <div>
-                    <h1 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">
-                        Historial <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600">Despachos</span>
-                    </h1>
-                    <p className="text-slate-500 font-medium text-sm">Archivo completo de salidas y entregas.</p>
-                </div>
+            {/* GRID DE FONDO DECORATIVO */}
+            <div className="fixed inset-0 z-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, #1e293b 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
 
-                {/* Buscador Moderno Integrado */}
-                <div className="w-full md:w-auto relative group">
-                    <span className="absolute left-4 top-3.5 text-slate-400">🔍</span>
-                    <input 
-                        type="text" 
-                        placeholder="Buscar cliente, remito..." 
-                        value={filtro}
-                        onChange={(e) => setFiltro(e.target.value)}
-                        className="w-full md:w-80 pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md focus:shadow-lg focus:border-indigo-500 outline-none transition-all font-bold text-sm text-slate-600 placeholder:text-slate-300"
-                    />
-                </div>
-            </header>
+            <div className="max-w-[1400px] mx-auto relative z-10">
+                
+                {/* ENCABEZADO */}
+                <header className="mb-12 flex flex-col md:flex-row justify-between items-end gap-6 border-b border-cyan-900/50 pb-6">
+                    <div>
+                        <h1 className="text-4xl font-black text-white tracking-tighter mb-2 uppercase drop-shadow-[0_0_10px_rgba(6,182,212,0.5)]">
+                            HISTORIAL <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-600">DESPACHOS</span>
+                        </h1>
+                        <p className="text-cyan-600 font-mono text-xs uppercase tracking-[0.3em]">Registro Histórico de Operaciones</p>
+                    </div>
 
-            {/* LISTA DE FECHAS */}
-            <div className="space-y-6">
-                {Object.entries(historial).map(([fecha, items]) => {
-                    // Filtrar items dentro de la fecha
-                    const itemsFiltrados = items.filter(i => 
-                        !filtro || 
-                        i.cliente.toLowerCase().includes(filtro.toLowerCase()) || 
-                        i.numero.includes(filtro)
-                    );
+                    {/* Buscador Moderno */}
+                    <div className="w-full md:w-auto relative group">
+                        <span className="absolute left-4 top-4 text-cyan-700 group-focus-within:text-cyan-400 transition-colors">🔍</span>
+                        <input 
+                            type="text" 
+                            placeholder="BUSCAR ID, CLIENTE..." 
+                            value={filtro}
+                            onChange={(e) => setFiltro(e.target.value)}
+                            className="w-full md:w-80 pl-12 pr-4 py-4 bg-[#0f172a] border border-cyan-900 rounded-xl shadow-inner focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:shadow-[0_0_15px_rgba(6,182,212,0.3)] outline-none font-mono text-sm text-cyan-100 placeholder-slate-700 transition-all uppercase tracking-wider"
+                        />
+                    </div>
+                </header>
 
-                    if (itemsFiltrados.length === 0 && filtro) return null;
+                {/* LISTA DE FECHAS */}
+                <div className="space-y-8">
+                    {Object.entries(historial).map(([fecha, items]) => {
+                        // Filtrar items dentro de la fecha
+                        const itemsFiltrados = items.filter(i => 
+                            !filtro || 
+                            i.cliente.toLowerCase().includes(filtro.toLowerCase()) || 
+                            i.numero.includes(filtro)
+                        );
 
-                    const isExpanded = fechasExpandidas.has(fecha);
+                        if (itemsFiltrados.length === 0 && filtro) return null;
 
-                    return (
-                        <div key={fecha} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                            {/* Header Fecha */}
-                            <div 
-                                onClick={() => toggleFecha(fecha)}
-                                className="p-4 bg-slate-50 flex justify-between items-center cursor-pointer hover:bg-slate-100 transition-colors"
-                            >
-                                <div className="flex items-center gap-3">
-                                    <span className="text-lg font-black text-slate-700 tracking-tight">📅 {fecha}</span>
-                                    <span className="text-xs font-bold bg-slate-200 text-slate-500 px-2 py-1 rounded-full">
-                                        {itemsFiltrados.length} Registros
-                                    </span>
+                        const isExpanded = fechasExpandidas.has(fecha);
+
+                        return (
+                            <div key={fecha} className="bg-[#0f172a]/60 backdrop-blur-sm rounded-2xl shadow-lg border border-slate-800 overflow-hidden group hover:border-cyan-900 transition-all">
+                                {/* Header Fecha */}
+                                <div 
+                                    onClick={() => toggleFecha(fecha)}
+                                    className="p-5 bg-slate-900/80 flex justify-between items-center cursor-pointer hover:bg-slate-800 transition-colors border-b border-slate-800"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <span className="text-lg font-black text-cyan-50 tracking-tight font-mono">📅 {fecha}</span>
+                                        <span className="text-[10px] font-bold font-mono bg-slate-800 text-cyan-400 px-3 py-1 rounded border border-cyan-900/50">
+                                            [{itemsFiltrados.length}] REGISTRO
+                                        </span>
+                                    </div>
+                                    <span className={`transform transition-transform text-cyan-600 ${isExpanded ? 'rotate-180 text-cyan-400' : ''}`}>▼</span>
                                 </div>
-                                <span className={`transform transition-transform text-slate-400 ${isExpanded ? 'rotate-180' : ''}`}>▼</span>
-                            </div>
 
-                            {/* Contenido Fecha */}
-                            {isExpanded && (
-                                <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-4 bg-slate-50/50">
-                                    {itemsFiltrados.map((item) => (
-                                        <div key={item.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm hover:shadow-md transition-all relative group">
-                                            
-                                            {/* Botón Eliminar */}
-                                            <button 
-                                                onClick={() => eliminarItem(fecha, item.id)}
-                                                className="absolute top-3 right-3 text-red-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity font-bold"
-                                                title="Eliminar registro"
-                                            >
-                                                🗑️
-                                            </button>
+                                {/* Contenido Fecha */}
+                                {isExpanded && (
+                                    <div className="p-5 grid grid-cols-1 lg:grid-cols-2 gap-4 bg-[#050b14]/50">
+                                        {itemsFiltrados.map((item) => (
+                                            <div key={item.id} className="bg-[#0f172a] p-5 rounded-xl border border-slate-800 shadow-sm hover:shadow-[0_0_20px_rgba(6,182,212,0.1)] hover:border-cyan-500/30 transition-all relative group/card">
+                                                
+                                                {/* Botón Eliminar */}
+                                                <button 
+                                                    onClick={() => eliminarItem(fecha, item.id)}
+                                                    className="absolute top-3 right-3 text-red-900 hover:text-red-500 opacity-0 group-hover/card:opacity-100 transition-opacity font-bold bg-black/50 p-2 rounded-lg"
+                                                    title="Purge Record"
+                                                >
+                                                    🗑️
+                                                </button>
 
-                                            {/* ------ TIPO: REMITO ------ */}
-                                            {item.tipo === 'remito' ? (
-                                                <>
-                                                    <div className="flex justify-between items-start mb-2 pr-6">
-                                                        <div>
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-[10px] font-black bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded uppercase">Remito</span>
-                                                                <span className="text-sm font-black text-slate-800">#{item.numero}</span>
+                                                {item.tipo === 'remito' ? (
+                                                    /* ------ TIPO: REMITO ------ */
+                                                    <>
+                                                        <div className="flex justify-between items-start mb-4 pr-10">
+                                                            <div>
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <span className="text-[9px] font-black bg-cyan-900/40 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded uppercase font-mono tracking-widest">R-LOG</span>
+                                                                    <span className="text-sm font-black text-white font-mono tracking-wide">#{item.numero}</span>
+                                                                </div>
+                                                                <h3 className="font-bold text-slate-300 uppercase tracking-wide truncate max-w-[250px]">{item.cliente}</h3>
                                                             </div>
-                                                            <h3 className="font-bold text-slate-700 uppercase mt-1 truncate max-w-[250px]">{item.cliente}</h3>
                                                         </div>
-                                                    </div>
 
-                                                    {/* Estado */}
-                                                    <div className={`text-[10px] font-bold px-2 py-1 rounded-md inline-block mb-3 border ${getEstadoRemito(item).color}`}>
-                                                        {getEstadoRemito(item).texto}
-                                                    </div>
+                                                        {/* Estado */}
+                                                        <div className={`text-[9px] font-bold font-mono px-3 py-1 rounded border inline-block mb-4 uppercase tracking-widest ${getEstadoRemito(item).color}`}>
+                                                            {getEstadoRemito(item).texto}
+                                                        </div>
 
-                                                    {/* Info Extra */}
-                                                    <div className="grid grid-cols-2 gap-2 text-xs text-slate-500 mb-3 bg-slate-50 p-2 rounded-lg">
-                                                        <p>🚚 <b>Chofer:</b> {item.chofer || '-'}</p>
-                                                        <p>📋 <b>Control:</b> {item.responsable || '-'}</p>
-                                                    </div>
+                                                        {/* Info Extra */}
+                                                        <div className="grid grid-cols-2 gap-2 text-xs text-slate-400 mb-4 bg-slate-900/50 p-3 rounded-lg border border-slate-800 font-mono">
+                                                            <p><span className="text-cyan-600">CHOFER:</span> {item.chofer || 'N/A'}</p>
+                                                            <p><span className="text-cyan-600">CTRL:</span> {item.responsable || 'N/A'}</p>
+                                                        </div>
 
-                                                    {/* Productos Entregados */}
-                                                    <div className="text-xs border-t border-slate-100 pt-2">
-                                                        <p className="font-bold text-slate-400 uppercase text-[9px] mb-1">Entregado:</p>
-                                                        <ul className="grid grid-cols-2 gap-x-2">
-                                                            {Object.entries(item.productosMap || {}).map(([prod, cant]) => (
-                                                                <li key={prod} className="text-slate-600">
-                                                                    <span className="font-bold text-slate-800">{cant}x</span> {prod}
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-
-                                                    {/* Items Rechazados (SI EXISTEN) */}
-                                                    {item.itemsRechazados && item.itemsRechazados.length > 0 && (
-                                                        <div className="text-xs mt-3 bg-red-50 p-2 rounded-lg border border-red-100">
-                                                            <p className="font-black text-red-400 uppercase text-[9px] mb-1">❌ No Recibido / Rechazado:</p>
-                                                            <ul className="space-y-1">
-                                                                {item.itemsRechazados.map((rechazo, idx) => (
-                                                                    <li key={idx} className="text-red-700 font-bold flex justify-between">
-                                                                        <span>{rechazo.codigo}</span>
-                                                                        <span>{rechazo.cantidadRechazada} un.</span>
+                                                        {/* Productos Entregados */}
+                                                        <div className="text-xs border-t border-slate-800 pt-3">
+                                                            <p className="font-black text-slate-500 uppercase text-[9px] mb-2 tracking-widest">Manifest Cargo:</p>
+                                                            <ul className="grid grid-cols-2 gap-x-2 gap-y-1 font-mono">
+                                                                {Object.entries(item.productosMap || {}).map(([prod, cant]) => (
+                                                                    <li key={prod} className="text-slate-400">
+                                                                        <span className="font-bold text-cyan-400">{cant}</span> <span className="text-[10px]">{prod}</span>
                                                                     </li>
                                                                 ))}
                                                             </ul>
                                                         </div>
-                                                    )}
-                                                </>
-                                            ) : (
-                                                /* ------ TIPO: SOPORTE ------ */
-                                                <>
-                                                    <div className="flex justify-between items-start mb-2 pr-6">
-                                                        <div>
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-[10px] font-black bg-orange-100 text-orange-600 px-2 py-0.5 rounded uppercase">Soporte</span>
-                                                                <span className="text-sm font-black text-slate-800">#{item.numero}</span>
+
+                                                        {/* Items Rechazados */}
+                                                        {item.itemsRechazados && item.itemsRechazados.length > 0 && (
+                                                            <div className="text-xs mt-4 bg-red-900/10 p-3 rounded-lg border border-red-900/50">
+                                                                <p className="font-black text-red-500 uppercase text-[9px] mb-2 tracking-widest flex items-center gap-2"><span>⚠️</span> Rechazos / Faltantes</p>
+                                                                <ul className="space-y-1 font-mono">
+                                                                    {item.itemsRechazados.map((rechazo, idx) => (
+                                                                        <li key={idx} className="text-red-400 font-bold flex justify-between">
+                                                                            <span>{rechazo.codigo}</span>
+                                                                            <span>-{rechazo.cantidadRechazada}</span>
+                                                                        </li>
+                                                                    ))}
+                                                                </ul>
                                                             </div>
-                                                            <h3 className="font-bold text-slate-700 uppercase mt-1 truncate max-w-[250px]">{item.cliente}</h3>
+                                                        )}
+                                                    </>
+                                                ) : (
+                                                    /* ------ TIPO: SOPORTE ------ */
+                                                    <>
+                                                        <div className="flex justify-between items-start mb-4 pr-10">
+                                                            <div>
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <span className="text-[9px] font-black bg-violet-900/40 text-violet-300 border border-violet-500/30 px-2 py-0.5 rounded uppercase font-mono tracking-widest">S-TEC</span>
+                                                                    <span className="text-sm font-black text-white font-mono tracking-wide">#{item.numero}</span>
+                                                                </div>
+                                                                <h3 className="font-bold text-slate-300 uppercase tracking-wide truncate max-w-[250px]">{item.cliente}</h3>
+                                                            </div>
                                                         </div>
-                                                    </div>
 
-                                                    <div className="text-[10px] font-bold px-2 py-1 rounded-md inline-block mb-3 bg-orange-50 text-orange-700 border border-orange-100">
-                                                        {item.estadoSoporte || "Entregado"}
-                                                    </div>
+                                                        <div className="text-[9px] font-bold font-mono px-3 py-1 rounded border inline-block mb-4 uppercase tracking-widest bg-violet-900/20 text-violet-300 border-violet-500/40 shadow-[0_0_10px_rgba(139,92,246,0.2)]">
+                                                            {item.estadoSoporte || "ENTREGADO"}
+                                                        </div>
 
-                                                    <div className="text-xs text-slate-500 mb-3">
-                                                        📅 Ingreso: {item.fechaSoporte || '-'}
-                                                    </div>
+                                                        <div className="text-xs text-slate-500 mb-4 font-mono">
+                                                            📅 INGRESO: <span className="text-slate-300">{item.fechaSoporte || '-'}</span>
+                                                        </div>
 
-                                                    {/* Productos Soporte */}
-                                                    <div className="text-xs border-t border-slate-100 pt-2 bg-slate-50 p-2 rounded-lg">
-                                                        <p className="font-bold text-slate-400 uppercase text-[9px] mb-1">Trabajo / Detalle:</p>
-                                                        <ul className="list-disc list-inside text-slate-600">
-                                                            {item.productosLista?.map((p, i) => (
-                                                                <li key={i}>{p}</li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                </>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    );
-                })}
+                                                        {/* Productos Soporte */}
+                                                        <div className="text-xs border-t border-slate-800 pt-3 bg-slate-900/30 p-3 rounded-lg">
+                                                            <p className="font-black text-slate-500 uppercase text-[9px] mb-2 tracking-widest">Detalle Servicio:</p>
+                                                            <ul className="space-y-1 font-mono text-slate-400">
+                                                                {item.productosLista?.map((p, i) => (
+                                                                    <li key={i} className="flex gap-2">
+                                                                        <span className="text-violet-500">›</span> {p}
+                                                                    </li>
+                                                                ))}
+                                                            </ul>
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
             </div>
         </div>
     );

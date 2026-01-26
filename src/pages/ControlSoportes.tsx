@@ -9,6 +9,9 @@ interface Props {
 }
 
 const ControlSoportes: React.FC<Props> = ({ onNavigate }) => {
+    // -------------------------------------------------------------------------
+    // LÓGICA INTACTA
+    // -------------------------------------------------------------------------
     const [soportes, setSoportes] = useState<Record<string, Soporte>>({});
     const [filtro, setFiltro] = useState("");
     const [filtroEstado, setFiltroEstado] = useState("");
@@ -16,7 +19,7 @@ const ControlSoportes: React.FC<Props> = ({ onNavigate }) => {
     // Estado para el contador de alertas (Retiros pendientes)
     const [retirosPendientes, setRetirosPendientes] = useState(0);
 
-    // --- NUEVO: Estado para el Modal de WhatsApp ---
+    // Estado para el Modal de WhatsApp
     const [modalWhatsapp, setModalWhatsapp] = useState<{ open: boolean, soporte: any, nuevoRango: string } | null>(null);
 
     const rangos = ["Lunes Mañana", "Lunes Tarde", "Martes Mañana", "Martes Tarde", "Miércoles Mañana", "Miércoles Tarde", "Jueves Mañana", "Jueves Tarde", "Viernes Mañana", "Viernes Tarde"];
@@ -63,41 +66,30 @@ const ControlSoportes: React.FC<Props> = ({ onNavigate }) => {
 
     // --- ACCIONES ---
     
-    // 1. Intercepción del cambio de rango
     const handleRangoChange = (soporte: any, nuevoRango: string) => {
-        // Si borra el rango, actualizamos directo
         if (nuevoRango === "") {
             update(ref(db_realtime, `soportes/${soporte.id}`), { rangoEntrega: "" });
             return;
         }
-
-        // Si tiene teléfono guardado, abrimos el modal
         if (soporte.telefono) {
             setModalWhatsapp({ open: true, soporte, nuevoRango });
         } else {
-            // Si no tiene teléfono, actualizamos directo
             update(ref(db_realtime, `soportes/${soporte.id}`), { rangoEntrega: nuevoRango });
         }
     };
 
-    // 2. Confirmación y Envío de WhatsApp
     const confirmarAsignacion = (enviarWhatsapp: boolean) => {
         if (!modalWhatsapp) return;
         const { soporte, nuevoRango } = modalWhatsapp;
 
-        // A. Actualizar Firebase
         update(ref(db_realtime, `soportes/${soporte.id}`), { rangoEntrega: nuevoRango });
 
-        // B. Lógica WhatsApp
         if (enviarWhatsapp) {
             const telefonoStr = soporte.telefono ? String(soporte.telefono) : "";
             const telefonoLimpio = telefonoStr.replace(/\D/g, ''); 
             
             if (telefonoLimpio) {
-                // Agregar 549 para Argentina
                 const telefonoFull = telefonoLimpio.startsWith("54") ? telefonoLimpio : `549${telefonoLimpio}`;
-
-                // --- Fecha Amigable ---
                 let rangoAmigable = nuevoRango;
                 const partesRango = nuevoRango.split(" ");
                 if (partesRango.length === 2) {
@@ -106,8 +98,6 @@ const ControlSoportes: React.FC<Props> = ({ onNavigate }) => {
                     else if (turno === "Tarde") rangoAmigable = `${dia} por la tarde`;
                 }
 
-                // --- Lista de Productos ---
-                // Soportes puede tener array de strings o string simple, normalizamos
                 let itemsTexto = "";
                 if (Array.isArray(soporte.productos)) {
                     itemsTexto = soporte.productos.map((p: string) => `• ${p}`).join('\n');
@@ -117,15 +107,7 @@ const ControlSoportes: React.FC<Props> = ({ onNavigate }) => {
                     itemsTexto = "• Equipo en reparación";
                 }
 
-                // --- Construcción del Mensaje ---
-                const mensaje = `Hola *${soporte.cliente}*. 👋
-                
-Nos comunicamos para informarte que el día *${rangoAmigable}* estaremos entregando tu *Soporte N° ${soporte.numeroSoporte}*.
-
-🛠️ *Detalle del servicio:*
-${itemsTexto}
-
-Saludos, *BIPOKIDS*.`;
+                const mensaje = `Hola *${soporte.cliente}*. 👋\n\nNos comunicamos para informarte que el día *${rangoAmigable}* estaremos entregando tu *Soporte N° ${soporte.numeroSoporte}*.\n\n🛠️ *Detalle del servicio:*\n${itemsTexto}\n\nSaludos, *BIPOKIDS*.`;
                 
                 const url = `https://web.whatsapp.com/send?phone=${telefonoFull}&text=${encodeURIComponent(mensaje)}`;
                 window.open(url, '_blank');
@@ -133,7 +115,6 @@ Saludos, *BIPOKIDS*.`;
                 alert("Error: El teléfono no tiene un formato válido.");
             }
         }
-
         setModalWhatsapp(null);
     };
 
@@ -162,192 +143,206 @@ Saludos, *BIPOKIDS*.`;
         return prods || "";
     };
 
+    // -------------------------------------------------------------------------
+    // RENDERIZADO FUTURISTA
+    // -------------------------------------------------------------------------
     return (
-        <div className="max-w-7xl mx-auto px-4 pb-20 pt-10 font-sans bg-slate-50 min-h-screen">
+        <div className="min-h-screen relative font-sans text-cyan-50 bg-[#050b14] selection:bg-violet-500 selection:text-black pb-20 pt-10 px-4">
             
-            {/* ENCABEZADO UNIFICADO */}
-            <header className="mb-10 flex flex-col xl:flex-row justify-between items-end gap-6">
-                <div>
-                    <h1 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">
-                        Control <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-red-600">Soportes</span>
-                    </h1>
-                    <p className="text-slate-500 font-medium text-sm">Administración y entregas técnicas.</p>
-                </div>
+            {/* GRID DE FONDO DECORATIVO */}
+            <div className="fixed inset-0 z-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, #1e293b 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
 
-                <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto items-center">
-                    
-                    {/* BOTÓN ALERTA RETIROS (ACCESO A INGRESOS) */}
-                    <button 
-                        onClick={() => onNavigate && onNavigate('retiros')}
-                        className="relative bg-white border border-slate-200 px-4 py-3 rounded-2xl shadow-sm hover:shadow-md hover:bg-slate-50 transition-all flex items-center gap-2 group min-w-[110px] justify-center"
-                        title="Ver equipos retirados por choferes"
-                    >
-                        <span className="text-xl">📥</span>
-                        <span className="font-bold text-sm text-slate-600 uppercase hidden sm:block">Retiros</span>
-                        
-                        {/* Badge Rojo de Alerta (Solo si hay > 0) */}
-                        {retirosPendientes > 0 && (
-                            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-black w-6 h-6 flex items-center justify-center rounded-full shadow-lg animate-bounce">
-                                {retirosPendientes}
-                            </span>
-                        )}
-                    </button>
-
-                    {/* Buscador Moderno */}
-                    <div className="relative flex-1 min-w-[280px]">
-                        <span className="absolute left-4 top-3.5 text-slate-400">🔍</span>
-                        <input 
-                            type="text" 
-                            placeholder="Buscar cliente, n°..." 
-                            value={filtro}
-                            onChange={(e) => setFiltro(e.target.value)}
-                            className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md focus:shadow-lg focus:border-orange-400 outline-none transition-all font-bold text-sm text-slate-600 placeholder:text-slate-300"
-                        />
+            <div className="max-w-[1400px] mx-auto relative z-10">
+                
+                {/* ENCABEZADO UNIFICADO */}
+                <header className="mb-10 flex flex-col xl:flex-row justify-between items-end gap-6 border-b border-violet-900/50 pb-6">
+                    <div>
+                        <h1 className="text-4xl font-black text-white tracking-tighter mb-2 uppercase drop-shadow-[0_0_10px_rgba(139,92,246,0.3)]">
+                            CONTROL <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-fuchsia-500">SOPORTES</span>
+                        </h1>
+                        <p className="text-violet-400 font-mono text-xs uppercase tracking-[0.3em]">Módulo de Reparaciones & Garantías</p>
                     </div>
 
-                    {/* Selector de Estado */}
-                    <div className="relative min-w-[200px]">
-                        <span className="absolute left-4 top-3.5 text-slate-400">📂</span>
-                        <select 
-                            value={filtroEstado}
-                            onChange={(e) => setFiltroEstado(e.target.value)}
-                            className="w-full pl-11 pr-10 py-3 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md focus:shadow-lg focus:border-orange-400 outline-none transition-all font-bold text-sm text-slate-600 appearance-none cursor-pointer"
+                    <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto items-center">
+                        
+                        {/* BOTÓN ALERTA RETIROS */}
+                        <button 
+                            onClick={() => onNavigate && onNavigate('retiros')}
+                            className="relative bg-[#0f172a] border border-violet-500/30 px-6 py-4 rounded-xl shadow-[0_0_15px_rgba(139,92,246,0.1)] hover:shadow-[0_0_25px_rgba(139,92,246,0.3)] hover:bg-violet-900/20 transition-all flex items-center gap-3 group min-w-[140px] justify-center"
+                            title="Ver equipos retirados por choferes"
                         >
-                            <option value="">Todos los Estados</option>
-                            <option value="Pendiente">Pendiente</option>
-                            <option value="En Taller">En Taller</option>
-                            <option value="Resuelto">Resuelto</option>
-                        </select>
-                        <span className="absolute right-4 top-4 text-slate-400 text-xs pointer-events-none">▼</span>
-                    </div>
-                </div>
-            </header>
-
-            {/* TABLA PENDIENTES */}
-            <section className="bg-white rounded-[2rem] shadow-xl shadow-blue-900/5 border border-slate-100 overflow-hidden mb-12">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                        <thead>
-                            <tr className="bg-slate-50 text-slate-400 font-black uppercase text-[10px] tracking-widest border-b border-slate-100">
-                                <th className="p-5">N° Soporte</th>
-                                <th className="p-5">Cliente</th>
-                                <th className="p-5">Fecha</th>
-                                <th className="p-5 w-1/3">Productos</th>
-                                <th className="p-5 text-center">Estado</th>
-                                <th className="p-5 text-center">Acciones / Logística</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-50">
-                            {pendientes.length === 0 ? (
-                                <tr><td colSpan={6} className="p-8 text-center text-slate-400 italic font-bold">No hay soportes pendientes</td></tr>
-                            ) : (
-                                pendientes.map((s) => {
-                                    const esResuelto = s.estado === "Resuelto";
-                                    return (
-                                        <tr key={s.id} className="hover:bg-orange-50/30 transition-colors text-[11px] font-bold text-slate-700">
-                                            <td className="p-5 font-mono text-orange-600">#{s.numeroSoporte}</td>
-                                            <td className="p-5 uppercase">
-                                                {s.cliente}
-                                                {/* Indicador visual de teléfono */}
-                                                {(s as any).telefono && <span className="ml-1 text-[8px] bg-green-100 text-green-600 px-1 rounded border border-green-200">📞</span>}
-                                            </td>
-                                            <td className="p-5 text-slate-500">{s.fechaSoporte}</td>
-                                            <td className="p-5 text-xs text-slate-500 font-normal truncate max-w-xs" title={renderProductos(s.productos)}>
-                                                {renderProductos(s.productos)}
-                                            </td>
-                                            <td className="p-5 text-center">
-                                                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase border ${
-                                                    esResuelto 
-                                                    ? 'bg-green-100 text-green-700 border-green-200' 
-                                                    : 'bg-orange-50 text-orange-600 border-orange-100'
-                                                }`}>
-                                                    {s.estado}
-                                                </span>
-                                            </td>
-                                            <td className="p-5 text-center">
-                                                <div className="flex gap-2 justify-center items-center">
-                                                    
-                                                    {esResuelto && (
-                                                        <select 
-                                                            value={s.rangoEntrega || ""} 
-                                                            onChange={(e) => handleRangoChange(s, e.target.value)}
-                                                            className="bg-white border-2 border-green-100 rounded-lg p-2 text-[10px] font-black uppercase outline-none focus:border-green-400 cursor-pointer hover:border-green-300 transition-colors w-32"
-                                                        >
-                                                            <option value="">🚚 ASIGNAR</option>
-                                                            {rangos.map(r => <option key={r} value={r}>{r}</option>)}
-                                                        </select>
-                                                    )}
-
-                                                    <button 
-                                                        onClick={() => toggleEstadoSoporte(s.id, s.estado)}
-                                                        className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-colors shadow-sm flex items-center gap-1 ${
-                                                            esResuelto 
-                                                            ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200 border border-yellow-200' 
-                                                            : 'bg-green-500 text-white hover:bg-green-600 border border-green-600'
-                                                        }`}
-                                                        title={esResuelto ? "Volver a Pendiente" : "Marcar como Resuelto"}
-                                                    >
-                                                        {esResuelto ? (
-                                                            <>⏪ <span className="hidden xl:inline">Pendiente</span></>
-                                                        ) : (
-                                                            <>✅ <span className="hidden xl:inline">Resuelto</span></>
-                                                        )}
-                                                    </button>
-                                                    
-                                                    <button 
-                                                        onClick={() => eliminarSoporte(s.id)}
-                                                        className="bg-red-50 text-red-500 border border-red-100 px-3 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-500 hover:text-white transition-colors shadow-sm"
-                                                        title="Eliminar Soporte"
-                                                    >
-                                                        🗑️
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })
+                            <span className="text-xl group-hover:scale-110 transition-transform">📥</span>
+                            <span className="font-bold font-mono text-xs text-violet-300 uppercase tracking-wider hidden sm:block">Retiros</span>
+                            
+                            {/* Badge Rojo de Alerta (Holográfico) */}
+                            {retirosPendientes > 0 && (
+                                <span className="absolute -top-2 -right-2 bg-red-600/90 text-white text-[10px] font-black w-6 h-6 flex items-center justify-center rounded-full shadow-[0_0_10px_red] animate-pulse">
+                                    {retirosPendientes}
+                                </span>
                             )}
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+                        </button>
 
-            {/* MODAL WHATSAPP (NUEVO) */}
-            {modalWhatsapp && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
-                    <div className="bg-white rounded-[2rem] p-8 w-full max-w-sm shadow-2xl animate-in zoom-in duration-200">
-                        <div className="text-center mb-6">
-                            <span className="text-4xl">📱</span>
-                            <h3 className="text-xl font-black text-slate-800 mt-2">Notificar al Cliente</h3>
-                            <p className="text-sm text-slate-500 mt-1">Este soporte tiene un teléfono asociado.</p>
+                        {/* Buscador Moderno */}
+                        <div className="relative flex-1 min-w-[280px] group">
+                            <span className="absolute left-4 top-4 text-violet-700 group-focus-within:text-violet-400 transition-colors">🔍</span>
+                            <input 
+                                type="text" 
+                                placeholder="BUSCAR ID O CLIENTE..." 
+                                value={filtro}
+                                onChange={(e) => setFiltro(e.target.value)}
+                                className="w-full pl-12 pr-4 py-4 bg-[#0f172a] border border-cyan-900 rounded-xl shadow-inner focus:border-violet-500 focus:ring-1 focus:ring-violet-500 focus:shadow-[0_0_15px_rgba(139,92,246,0.3)] outline-none font-mono text-sm text-violet-100 placeholder-slate-700 transition-all uppercase tracking-wider"
+                            />
                         </div>
-                        
-                        <div className="space-y-3">
-                            <button 
-                                onClick={() => confirmarAsignacion(true)}
-                                className="w-full p-4 bg-green-500 text-white rounded-xl font-bold shadow-lg hover:bg-green-600 transition-all flex items-center justify-center gap-2"
+
+                        {/* Selector de Estado */}
+                        <div className="relative min-w-[200px] group">
+                            <span className="absolute left-4 top-4 text-violet-700 group-focus-within:text-violet-400 transition-colors">📂</span>
+                            <select 
+                                value={filtroEstado}
+                                onChange={(e) => setFiltroEstado(e.target.value)}
+                                className="w-full pl-12 pr-10 py-4 bg-[#0f172a] border border-cyan-900 rounded-xl shadow-inner focus:border-violet-500 focus:ring-1 focus:ring-violet-500 focus:shadow-[0_0_15px_rgba(139,92,246,0.3)] outline-none transition-all font-mono font-bold text-xs uppercase text-violet-200 appearance-none cursor-pointer"
                             >
-                                <span>💬</span> Asignar y Enviar WhatsApp
-                            </button>
+                                <option value="">Estado: Todos</option>
+                                <option value="Pendiente">Pendiente</option>
+                                <option value="En Taller">En Taller</option>
+                                <option value="Resuelto">Resuelto</option>
+                            </select>
+                            <span className="absolute right-4 top-4 text-violet-800 text-xs pointer-events-none">▼</span>
+                        </div>
+                    </div>
+                </header>
+
+                {/* TABLA PENDIENTES */}
+                <section className="bg-[#0f172a]/40 backdrop-blur-sm rounded-3xl border border-violet-900/30 overflow-hidden mb-12 shadow-2xl relative">
+                    {/* Decoration Line */}
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-violet-500 to-transparent opacity-50"></div>
+                    
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                            <thead>
+                                <tr className="bg-slate-900/80 text-violet-400 font-mono text-[10px] uppercase tracking-[0.2em] border-b border-violet-900/50">
+                                    <th className="p-5">ID Ref</th>
+                                    <th className="p-5">Entidad / Cliente</th>
+                                    <th className="p-5">Ingreso</th>
+                                    <th className="p-5 w-1/3">Componentes</th>
+                                    <th className="p-5 text-center">Diagnóstico</th>
+                                    <th className="p-5 text-center">Protocolo</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-violet-900/20 font-mono text-xs">
+                                {pendientes.length === 0 ? (
+                                    <tr><td colSpan={6} className="p-8 text-center text-slate-600 font-mono italic">:: NO DATA FOUND ::</td></tr>
+                                ) : (
+                                    pendientes.map((s) => {
+                                        const esResuelto = s.estado === "Resuelto";
+                                        return (
+                                            <tr key={s.id} className="hover:bg-violet-900/10 transition-colors group">
+                                                <td className="p-5 text-orange-400 font-bold group-hover:text-orange-300 group-hover:shadow-[0_0_10px_rgba(249,115,22,0.2)] transition-all">
+                                                    #{s.numeroSoporte}
+                                                </td>
+                                                <td className="p-5 uppercase font-bold text-slate-300">
+                                                    {s.cliente}
+                                                    {/* Indicador visual de teléfono */}
+                                                    {(s as any).telefono && <span className="ml-2 text-[10px] inline-block align-middle shadow-[0_0_5px_#10b981] bg-emerald-500/20 text-emerald-400 px-1.5 rounded border border-emerald-500/50">📞 LINK</span>}
+                                                </td>
+                                                <td className="p-5 text-slate-500 text-[10px]">{s.fechaSoporte}</td>
+                                                <td className="p-5 text-xs text-slate-400 font-normal truncate max-w-xs uppercase" title={renderProductos(s.productos)}>
+                                                    <span className="text-violet-600 mr-1">›</span> {renderProductos(s.productos)}
+                                                </td>
+                                                <td className="p-5 text-center">
+                                                    <span className={`px-3 py-1 rounded text-[10px] font-black uppercase tracking-wider border ${
+                                                        esResuelto 
+                                                        ? 'bg-emerald-900/30 text-emerald-400 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.3)]' 
+                                                        : 'bg-orange-900/20 text-orange-400 border-orange-500/30'
+                                                    }`}>
+                                                        {s.estado}
+                                                    </span>
+                                                </td>
+                                                <td className="p-5 text-center">
+                                                    <div className="flex gap-2 justify-center items-center">
+                                                        
+                                                        {esResuelto && (
+                                                            <select 
+                                                                value={s.rangoEntrega || ""} 
+                                                                onChange={(e) => handleRangoChange(s, e.target.value)}
+                                                                className="bg-slate-900 border border-emerald-900 rounded-lg p-2 text-[10px] font-mono text-emerald-300 uppercase outline-none focus:border-emerald-500 focus:shadow-[0_0_10px_rgba(16,185,129,0.3)] cursor-pointer hover:border-emerald-500 transition-colors w-32"
+                                                            >
+                                                                <option value="">🚚 ASIGNAR</option>
+                                                                {rangos.map(r => <option key={r} value={r}>{r}</option>)}
+                                                            </select>
+                                                        )}
+
+                                                        <button 
+                                                            onClick={() => toggleEstadoSoporte(s.id, s.estado)}
+                                                            className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase transition-all shadow-sm flex items-center gap-1 border ${
+                                                                esResuelto 
+                                                                ? 'bg-yellow-900/20 text-yellow-400 border-yellow-500/50 hover:bg-yellow-500/20 hover:shadow-[0_0_10px_yellow]' 
+                                                                : 'bg-emerald-600 text-black border-emerald-400 hover:bg-emerald-400 hover:shadow-[0_0_15px_#10b981]'
+                                                            }`}
+                                                            title={esResuelto ? "Revertir a Pendiente" : "Marcar como Resuelto"}
+                                                        >
+                                                            {esResuelto ? (
+                                                                <>⏪ <span className="hidden xl:inline">PENDIENTE</span></>
+                                                            ) : (
+                                                                <>✅ <span className="hidden xl:inline">RESUELTO</span></>
+                                                            )}
+                                                        </button>
+                                                        
+                                                        <button 
+                                                            onClick={() => eliminarSoporte(s.id)}
+                                                            className="bg-red-900/20 text-red-500 border border-red-500/30 px-3 py-2 rounded-lg text-[10px] font-black uppercase hover:bg-red-500 hover:text-white hover:shadow-[0_0_15px_red] transition-all"
+                                                            title="Eliminar Registro"
+                                                        >
+                                                            🗑️
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                {/* MODAL WHATSAPP */}
+                {modalWhatsapp && (
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+                        <div className="bg-[#0f172a] rounded-[2rem] p-8 w-full max-w-sm shadow-[0_0_50px_rgba(139,92,246,0.3)] border border-violet-900 animate-in zoom-in duration-200">
+                            <div className="text-center mb-6">
+                                <span className="text-4xl drop-shadow-[0_0_10px_rgba(16,185,129,0.8)]">📱</span>
+                                <h3 className="text-xl font-black text-white mt-4 uppercase tracking-wider">Comm Link Detectado</h3>
+                                <p className="text-xs font-mono text-emerald-400 mt-2">Objetivo con protocolo de comunicación.</p>
+                            </div>
+                            
+                            <div className="space-y-3">
+                                <button 
+                                    onClick={() => confirmarAsignacion(true)}
+                                    className="w-full p-4 bg-emerald-500 text-black rounded-xl font-bold font-mono shadow-[0_0_15px_#10b981] hover:bg-emerald-400 transition-all flex items-center justify-center gap-2 uppercase text-xs"
+                                >
+                                    <span>💬</span> Asignar + Enviar Msg
+                                </button>
+                                
+                                <button 
+                                    onClick={() => confirmarAsignacion(false)}
+                                    className="w-full p-4 bg-transparent text-slate-400 border border-slate-600 rounded-xl font-bold font-mono hover:border-slate-400 hover:text-white transition-all uppercase text-xs"
+                                >
+                                    Solo Asignar (Silent)
+                                </button>
+                            </div>
                             
                             <button 
-                                onClick={() => confirmarAsignacion(false)}
-                                className="w-full p-4 bg-white text-slate-600 border border-slate-200 rounded-xl font-bold hover:bg-slate-50 transition-all"
+                                onClick={() => setModalWhatsapp(null)}
+                                className="w-full mt-6 text-xs font-bold font-mono text-slate-600 uppercase hover:text-red-400 transition-colors"
                             >
-                                Solo Asignar
+                                Abortar
                             </button>
                         </div>
-                        
-                        <button 
-                            onClick={() => setModalWhatsapp(null)}
-                            className="w-full mt-6 text-xs font-bold text-slate-400 uppercase hover:text-slate-600"
-                        >
-                            Cancelar
-                        </button>
                     </div>
-                </div>
-            )}
+                )}
 
+            </div>
         </div>
     );
 };

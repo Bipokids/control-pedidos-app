@@ -26,20 +26,25 @@ interface NavButtonProps {
 const NavButton: React.FC<NavButtonProps> = ({ active, onClick, icon, label, alertCount }) => (
   <button 
     onClick={onClick}
-    className={`w-16 h-16 rounded-xl flex flex-col items-center justify-center gap-1 transition-all duration-300 group p-1 relative ${
+    className={`w-16 h-16 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all duration-300 group relative border ${
       active 
-        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/50 scale-105' 
-        : 'text-slate-500 hover:bg-slate-800 hover:text-white'
+        ? 'bg-cyan-900/30 border-cyan-500/50 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.3)] scale-105' 
+        : 'bg-transparent border-transparent text-slate-500 hover:text-white hover:bg-white/5 hover:border-slate-700'
     }`}
   >
+    {/* Alert Badge (Holographic Pulse) */}
     {alertCount && alertCount > 0 ? (
-      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-black w-5 h-5 flex items-center justify-center rounded-full shadow-md animate-pulse z-10 border-2 border-slate-900">
+      <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[9px] font-black w-5 h-5 flex items-center justify-center rounded-full shadow-[0_0_10px_red] animate-pulse z-10 border-2 border-[#050b14]">
         {alertCount}
       </span>
     ) : null}
 
-    <span className="text-xl mb-0.5">{icon}</span>
-    <span className="text-[8px] font-bold uppercase tracking-tight text-center leading-none max-w-full break-words">
+    {/* Icon Glow Effect */}
+    <span className={`text-2xl mb-0.5 transition-transform ${active ? 'scale-110 drop-shadow-[0_0_5px_currentColor]' : 'group-hover:scale-110'}`}>
+        {icon}
+    </span>
+    
+    <span className="text-[8px] font-bold font-mono uppercase tracking-wider text-center leading-none max-w-full break-words opacity-80 group-hover:opacity-100">
       {label}
     </span>
   </button>
@@ -82,7 +87,7 @@ const AppContent = () => {
     };
     
     const titulo = nombres[paginaActual] || 'App';
-    document.title = `${titulo} | Bipokids`;
+    document.title = `${titulo} | Nebula Control`;
   }, [paginaActual]);
 
   useEffect(() => {
@@ -96,10 +101,21 @@ const AppContent = () => {
   if (!user) return <Login />;
 
   return (
-    <div className="flex min-h-screen bg-slate-50 font-sans">
+    <div className="flex min-h-screen bg-[#050b14] font-sans selection:bg-cyan-500 selection:text-black overflow-hidden">
       
-      <nav className="w-24 bg-slate-900 flex flex-col items-center py-6 gap-3 fixed h-full z-40 shadow-2xl border-r border-slate-800 overflow-y-auto scrollbar-hide">
-        <div className="text-white font-black italic text-xl text-center mb-1 tracking-widest opacity-50">BK</div>
+      {/* GLOBAL BACKGROUND GRID (Persistente) */}
+      <div className="fixed inset-0 z-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, #1e293b 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
+
+      {/* SIDEBAR NAVIGATION */}
+      <nav className="w-24 bg-[#0f172a]/80 backdrop-blur-xl flex flex-col items-center py-8 gap-4 fixed h-full z-50 border-r border-slate-800/60 shadow-[5px_0_30px_rgba(0,0,0,0.5)] overflow-y-auto custom-scrollbar">
+        
+        {/* LOGO */}
+        <div className="mb-4 relative group cursor-default">
+            <div className="text-3xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-cyan-400 to-violet-600 drop-shadow-[0_0_10px_rgba(6,182,212,0.5)]">
+                BK
+            </div>
+            <div className="absolute inset-0 bg-cyan-500 blur-xl opacity-0 group-hover:opacity-20 transition-opacity duration-500"></div>
+        </div>
         
         {/* 1. GRUPO SUPERIOR (ADMIN) */}
         {role === 'admin' && (
@@ -119,7 +135,7 @@ const AppContent = () => {
         )}
 
         {/* Separador */}
-        {(role === 'admin' || role === 'produccion') && <div className="w-10 h-[1px] bg-slate-800 my-1"></div>}
+        {(role === 'admin' || role === 'produccion') && <div className="w-12 h-[1px] bg-slate-800 my-2"></div>}
 
         {/* 2. GRUPO OPERATIVO (Todos menos vendedor puro) */}
         {role !== 'vendedor' && (
@@ -132,29 +148,34 @@ const AppContent = () => {
 
         {/* 3. SOLO VENDEDOR (Acceso principal) */}
         {role === 'vendedor' && (
-             <NavButton active={paginaActual === 'devoluciones'} onClick={() => setPaginaActual('devoluciones')} icon="↩️" label="Devoluc." />
+             <NavButton active={paginaActual === 'devoluciones'} onClick={() => setPaginaActual('devoluciones')} icon="↩️" label="Devoluciones" />
         )}
 
-        {/* 4. GRUPO INFERIOR (ADMIN) - Ubicación solicitada */}
+        {/* 4. GRUPO INFERIOR (ADMIN) */}
         {role === 'admin' && (
            <>
-             <div className="w-10 h-[1px] bg-slate-800 my-1"></div>
+             <div className="w-12 h-[1px] bg-slate-800 my-2"></div>
              
              {/* Devoluciones aquí para admin (sobre Usuarios) */}
-             <NavButton active={paginaActual === 'devoluciones'} onClick={() => setPaginaActual('devoluciones')} icon="↩️" label="Devoluc." />
+             <NavButton active={paginaActual === 'devoluciones'} onClick={() => setPaginaActual('devoluciones')} icon="↩️" label="Devoluciones" />
              
              <NavButton active={paginaActual === 'usuarios'} onClick={() => setPaginaActual('usuarios')} icon="👥" label="Usuarios" />
            </>
         )}
 
-        <div className="mt-auto pb-4">
-             <button onClick={logout} className="w-10 h-10 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors" title="Cerrar Sesión">
+        <div className="mt-auto pb-4 pt-4 w-full flex justify-center border-t border-slate-800/50">
+             <button 
+                onClick={logout} 
+                className="w-10 h-10 rounded-xl bg-red-900/20 text-red-500 border border-red-500/20 flex items-center justify-center hover:bg-red-500 hover:text-white hover:shadow-[0_0_15px_red] transition-all" 
+                title="Cerrar Sesión"
+             >
                 ✕
              </button>
         </div>
       </nav>
 
-      <main className="flex-1 ml-24 transition-all duration-300">
+      {/* MAIN CONTENT WRAPPER */}
+      <main className="flex-1 ml-24 transition-all duration-300 relative z-10">
         
         {/* VISTAS ADMIN */}
         {role === 'admin' && (
