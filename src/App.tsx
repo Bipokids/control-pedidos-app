@@ -15,6 +15,17 @@ import Pagos from './pages/Pagos';
 import Devoluciones from './pages/Devoluciones';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
+// Estilos globales para ocultar scrollbar
+const globalStyles = `
+  .scrollbar-hide::-webkit-scrollbar {
+      display: none;
+  }
+  .scrollbar-hide {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+  }
+`;
+
 interface NavButtonProps {
   active: boolean;
   onClick: () => void;
@@ -26,13 +37,13 @@ interface NavButtonProps {
 const NavButton: React.FC<NavButtonProps> = ({ active, onClick, icon, label, alertCount }) => (
   <button 
     onClick={onClick}
-    className={`w-16 h-16 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all duration-300 group relative border ${
+    className={`w-16 h-16 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all duration-300 group/btn relative border shrink-0 ${
       active 
         ? 'bg-cyan-900/30 border-cyan-500/50 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.3)] scale-105' 
         : 'bg-transparent border-transparent text-slate-500 hover:text-white hover:bg-white/5 hover:border-slate-700'
     }`}
   >
-    {/* Alert Badge (Holographic Pulse) */}
+    {/* Alert Badge (Inside Menu) */}
     {alertCount && alertCount > 0 ? (
       <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[9px] font-black w-5 h-5 flex items-center justify-center rounded-full shadow-[0_0_10px_red] animate-pulse z-10 border-2 border-[#050b14]">
         {alertCount}
@@ -40,11 +51,11 @@ const NavButton: React.FC<NavButtonProps> = ({ active, onClick, icon, label, ale
     ) : null}
 
     {/* Icon Glow Effect */}
-    <span className={`text-2xl mb-0.5 transition-transform ${active ? 'scale-110 drop-shadow-[0_0_5px_currentColor]' : 'group-hover:scale-110'}`}>
+    <span className={`text-2xl mb-0.5 transition-transform ${active ? 'scale-110 drop-shadow-[0_0_5px_currentColor]' : 'group-hover/btn:scale-110'}`}>
         {icon}
     </span>
     
-    <span className="text-[8px] font-bold font-mono uppercase tracking-wider text-center leading-none max-w-full break-words opacity-80 group-hover:opacity-100">
+    <span className="text-[8px] font-bold font-mono uppercase tracking-wider text-center leading-none max-w-full break-words opacity-80 group-hover/btn:opacity-100">
       {label}
     </span>
   </button>
@@ -101,83 +112,99 @@ const AppContent = () => {
   if (!user) return <Login />;
 
   return (
-    <div className="flex min-h-screen bg-[#050b14] font-sans selection:bg-cyan-500 selection:text-black overflow-hidden">
+    <div className="flex min-h-screen bg-[#050b14] font-sans selection:bg-cyan-500 selection:text-black overflow-x-hidden">
+      <style>{globalStyles}</style>
       
-      {/* GLOBAL BACKGROUND GRID (Persistente) */}
+      {/* GLOBAL BACKGROUND GRID */}
       <div className="fixed inset-0 z-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, #1e293b 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
 
-      {/* SIDEBAR NAVIGATION */}
-      <nav className="w-24 bg-[#0f172a]/80 backdrop-blur-xl flex flex-col items-center py-8 gap-4 fixed h-full z-50 border-r border-slate-800/60 shadow-[5px_0_30px_rgba(0,0,0,0.5)] overflow-y-auto custom-scrollbar">
+      {/* --- SIDEBAR NAVIGATION (Furtivo) --- */}
+      {/* Ajustado: -translate-x-[calc(100%-14px)] para dejar 14px visibles */}
+      <nav className="fixed top-0 left-0 h-full w-28 bg-[#0f172a]/95 backdrop-blur-xl border-r border-cyan-500/30 shadow-[10px_0_30px_rgba(0,0,0,0.8)] z-50 transition-transform duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] -translate-x-[calc(100%-14px)] hover:translate-x-0 group overflow-y-auto scrollbar-hide flex flex-col items-center py-8 gap-4">
         
+        {/* --- PESTAÑA / INDICADOR VISUAL (Visible cuando está cerrado) --- */}
+        {/* Ajustado: w-[14px] para coincidir con la parte visible */}
+        <div className="absolute right-0 top-0 h-full w-[14px] flex flex-col justify-center items-center pointer-events-none">
+            
+            {/* Línea vertical guía de fondo */}
+            <div className={`w-[1px] h-full transition-colors duration-500 ${retirosPendientes > 0 ? 'bg-red-900/60' : 'bg-cyan-900/20'}`}></div>
+
+            {/* EL "MANGO" o PESTAÑA CENTRAL (Más grueso: w-[6px]) */}
+            <div className={`absolute right-[4px] w-[6px] rounded-full transition-all duration-500 ease-in-out group-hover:opacity-0 shadow-lg ${
+                retirosPendientes > 0 
+                ? 'h-32 bg-red-500 shadow-[0_0_25px_red] animate-pulse' // Estado ALERTA (Rojo, grande y pulsante)
+                : 'h-16 bg-cyan-500 shadow-[0_0_15px_cyan]' // Estado NORMAL (Cian)
+            }`}></div>
+        </div>
+
         {/* LOGO */}
-        <div className="mb-4 relative group cursor-default">
+        <div className="mb-4 relative group/logo cursor-default shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 delay-100">
             <div className="text-3xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-cyan-400 to-violet-600 drop-shadow-[0_0_10px_rgba(6,182,212,0.5)]">
                 BK
             </div>
-            <div className="absolute inset-0 bg-cyan-500 blur-xl opacity-0 group-hover:opacity-20 transition-opacity duration-500"></div>
         </div>
         
-        {/* 1. GRUPO SUPERIOR (ADMIN) */}
-        {role === 'admin' && (
-          <>
-            <NavButton active={paginaActual === 'remitos'} onClick={() => setPaginaActual('remitos')} icon="🚚" label="Logística" />
-            <NavButton 
-                active={paginaActual === 'control_soportes' || paginaActual === 'retiros'} 
-                onClick={() => setPaginaActual('control_soportes')} 
-                icon="📋" 
-                label="Soportes"
-                alertCount={retirosPendientes} 
-            />
-            <NavButton active={paginaActual === 'historial'} onClick={() => setPaginaActual('historial')} icon="🗂️" label="Despachos" />
-            <NavButton active={paginaActual === 'pagos'} onClick={() => setPaginaActual('pagos')} icon="💰" label="Pagos" />
-            <NavButton active={paginaActual === 'estadisticas'} onClick={() => setPaginaActual('estadisticas')} icon="📊" label="Métricas" />
-          </>
-        )}
-
-        {/* Separador */}
-        {(role === 'admin' || role === 'produccion') && <div className="w-12 h-[1px] bg-slate-800 my-2"></div>}
-
-        {/* 2. GRUPO OPERATIVO (Todos menos vendedor puro) */}
-        {role !== 'vendedor' && (
+        {/* Contenedor de Botones (Fade In) */}
+        <div className="flex flex-col gap-4 w-full items-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-75">
+            {/* 1. GRUPO SUPERIOR (ADMIN) */}
+            {role === 'admin' && (
             <>
-                <NavButton active={paginaActual === 'contador'} onClick={() => setPaginaActual('contador')} icon="🔢" label="Contador" />
-                <NavButton active={paginaActual === 'produccion'} onClick={() => setPaginaActual('produccion')} icon="⚙️" label="Producción" />
-                <NavButton active={paginaActual === 'gestion_soportes'} onClick={() => setPaginaActual('gestion_soportes')} icon="🔧" label="Reparación" />
+                <NavButton active={paginaActual === 'remitos'} onClick={() => setPaginaActual('remitos')} icon="🚚" label="Logística" />
+                <NavButton 
+                    active={paginaActual === 'control_soportes' || paginaActual === 'retiros'} 
+                    onClick={() => setPaginaActual('control_soportes')} 
+                    icon="📋" 
+                    label="Soportes"
+                    alertCount={retirosPendientes} 
+                />
+                <NavButton active={paginaActual === 'historial'} onClick={() => setPaginaActual('historial')} icon="🗂️" label="Archive" />
+                <NavButton active={paginaActual === 'pagos'} onClick={() => setPaginaActual('pagos')} icon="💰" label="Finance" />
+                <NavButton active={paginaActual === 'estadisticas'} onClick={() => setPaginaActual('estadisticas')} icon="📊" label="Metrics" />
             </>
-        )}
+            )}
 
-        {/* 3. SOLO VENDEDOR (Acceso principal) */}
-        {role === 'vendedor' && (
-             <NavButton active={paginaActual === 'devoluciones'} onClick={() => setPaginaActual('devoluciones')} icon="↩️" label="Devoluciones" />
-        )}
+            {/* Separador */}
+            {(role === 'admin' || role === 'produccion') && <div className="w-12 h-[1px] bg-slate-800 my-2 shrink-0"></div>}
 
-        {/* 4. GRUPO INFERIOR (ADMIN) */}
-        {role === 'admin' && (
-           <>
-             <div className="w-12 h-[1px] bg-slate-800 my-2"></div>
-             
-             {/* Devoluciones aquí para admin (sobre Usuarios) */}
-             <NavButton active={paginaActual === 'devoluciones'} onClick={() => setPaginaActual('devoluciones')} icon="↩️" label="Devoluciones" />
-             
-             <NavButton active={paginaActual === 'usuarios'} onClick={() => setPaginaActual('usuarios')} icon="👥" label="Usuarios" />
-           </>
-        )}
+            {/* 2. GRUPO OPERATIVO */}
+            {role !== 'vendedor' && (
+                <>
+                    <NavButton active={paginaActual === 'contador'} onClick={() => setPaginaActual('contador')} icon="🔢" label="Monitor" />
+                    <NavButton active={paginaActual === 'produccion'} onClick={() => setPaginaActual('produccion')} icon="⚙️" label="Prod." />
+                    <NavButton active={paginaActual === 'gestion_soportes'} onClick={() => setPaginaActual('gestion_soportes')} icon="🔧" label="Taller" />
+                </>
+            )}
 
-        <div className="mt-auto pb-4 pt-4 w-full flex justify-center border-t border-slate-800/50">
-             <button 
-                onClick={logout} 
-                className="w-10 h-10 rounded-xl bg-red-900/20 text-red-500 border border-red-500/20 flex items-center justify-center hover:bg-red-500 hover:text-white hover:shadow-[0_0_15px_red] transition-all" 
-                title="Cerrar Sesión"
-             >
-                ✕
-             </button>
+            {/* 3. SOLO VENDEDOR */}
+            {role === 'vendedor' && (
+                <NavButton active={paginaActual === 'devoluciones'} onClick={() => setPaginaActual('devoluciones')} icon="↩️" label="RMA" />
+            )}
+
+            {/* 4. GRUPO INFERIOR (ADMIN) */}
+            {role === 'admin' && (
+            <>
+                <div className="w-12 h-[1px] bg-slate-800 my-2 shrink-0"></div>
+                <NavButton active={paginaActual === 'devoluciones'} onClick={() => setPaginaActual('devoluciones')} icon="↩️" label="RMA" />
+                <NavButton active={paginaActual === 'usuarios'} onClick={() => setPaginaActual('usuarios')} icon="👥" label="Users" />
+            </>
+            )}
+
+            <div className="mt-auto pb-4 pt-4 w-full flex justify-center border-t border-slate-800/50 shrink-0">
+                <button 
+                    onClick={logout} 
+                    className="w-10 h-10 rounded-xl bg-red-900/20 text-red-500 border border-red-500/20 flex items-center justify-center hover:bg-red-500 hover:text-white hover:shadow-[0_0_15px_red] transition-all" 
+                    title="Cerrar Sesión"
+                >
+                    ✕
+                </button>
+            </div>
         </div>
       </nav>
 
-      {/* MAIN CONTENT WRAPPER */}
-      <main className="flex-1 ml-24 transition-all duration-300 relative z-10">
+      {/* MAIN CONTENT */}
+      {/* ml-4 deja un pequeño margen para no chocar con la pestaña */}
+      <main className="flex-1 ml-4 transition-all duration-300 relative z-10 w-full">
         
-        {/* VISTAS ADMIN */}
         {role === 'admin' && (
             <>
                 {paginaActual === 'remitos' && <ControlDeRemitos />}
@@ -190,12 +217,10 @@ const AppContent = () => {
             </>
         )}
 
-        {/* VISTAS DEVOLUCIONES (Admin + Vendedor) */}
         {(role === 'admin' || role === 'vendedor') && paginaActual === 'devoluciones' && (
             <Devoluciones />
         )}
         
-        {/* VISTAS OPERATIVAS (Todos menos vendedor puro) */}
         {role !== 'vendedor' && (
             <>
                 {paginaActual === 'contador' && <ContadorArmados />}
