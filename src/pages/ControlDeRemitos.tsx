@@ -645,7 +645,7 @@ const ControlDeRemitos: React.FC = () => {
                                             </div>
                                             <p className="font-bold text-slate-200 text-sm uppercase truncate max-w-[150px] tracking-wide">{item.cliente}</p>
                                             <p className="text-[9px] text-slate-500 mt-1 font-mono">Date: {item.fechaEntrega ? item.fechaEntrega.split('T')[0] : 'N/A'}</p>
-                                            <p className="text-[10px] font-bold text-cyan-600 mt-1 flex items-center gap-1 font-mono"><span>⚓</span> {item.chofer || 'UNASSIGNED'}</p>
+                                            <p className="text-[10px] font-bold text-cyan-600 mt-1 flex items-center gap-1 font-mono"><span>Chofer:</span> {item.chofer || 'UNASSIGNED'}</p>
                                         </div>
                                         <div className="flex gap-2">
                                             <button onClick={() => setModalFirma({open: true, data: item, type: item._type})} className="p-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-cyan-500 hover:text-black hover:shadow-[0_0_10px_cyan] transition-all" title="Ver Firma">🖋️</button>
