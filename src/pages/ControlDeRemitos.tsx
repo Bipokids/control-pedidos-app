@@ -664,7 +664,7 @@ const ControlDeRemitos: React.FC = () => {
                 {/* MODAL DETALLE (CON FIRMA) */}
                 {modalDetalle.open && modalDetalle.data && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md" onClick={() => setModalDetalle({ open: false, data: null })}>
-                        <div className="bg-[#0f172a] rounded-[2rem] p-8 w-full max-w-lg shadow-[0_0_50px_rgba(6,182,212,0.2)] border border-cyan-500/30 animate-in fade-in zoom-in duration-300 relative overflow-hidden" onClick={e => e.stopPropagation()}>
+                        <div className="bg-[#0f172a] rounded-[2rem] p-8 w-full max-w-lg shadow-[0_0_50px_rgba(6,182,212,0.2)] border border-cyan-500/30 animate-in fade-in zoom-in duration-300 relative overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
                             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500 to-purple-600"></div>
 
                             {/* HEADER */}
@@ -696,7 +696,7 @@ const ControlDeRemitos: React.FC = () => {
                             </div>
 
                             {/* BODY */}
-                            <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                            <div className="space-y-6 overflow-y-auto pr-2 custom-scrollbar flex-1 min-h-0">
                                 <div className="bg-slate-900/50 p-5 rounded-2xl border border-slate-800">
                                     <h4 className="text-[10px] font-black text-cyan-600 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">📦 Detalle de envío</h4>
                                     <ul className="space-y-3">
