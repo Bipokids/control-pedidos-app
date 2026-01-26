@@ -503,7 +503,7 @@ const ControlDeRemitos: React.FC = () => {
                                                     {r.cliente}
                                                     {/* Indicadores neon intensos */}
                                                     {(r as any).telefono && <span className="ml-2 text-[10px] inline-block align-middle shadow-[0_0_5px_#10b981] bg-emerald-600 text-black px-1.5 rounded font-black border border-emerald-400">📞</span>}
-                                                    {(r as any).notificado && <span className="ml-2 text-[10px] inline-block align-middle shadow-[0_0_5px_#3b82f6] bg-blue-600 text-white px-1.5 rounded font-black border border-blue-400">✓ SENT</span>}
+                                                    {(r as any).notificado && <span className="ml-2 text-[10px] inline-block align-middle shadow-[0_0_5px_#3b82f6] bg-blue-600 text-white px-1.5 rounded font-black border border-blue-400">✓ ENVIADO</span>}
                                                 </td>
                                                 <td className="p-5 text-center"><input type="checkbox" checked={r.produccion} onChange={(e) => update(ref(db_realtime, `remitos/${id}`), { produccion: e.target.checked })} className="w-4 h-4 rounded bg-slate-800 border-slate-600 text-cyan-600 focus:ring-cyan-500 focus:ring-offset-slate-900" /></td>
                                                 <td className="p-5 text-center">
@@ -651,7 +651,7 @@ const ControlDeRemitos: React.FC = () => {
                                                 ? "bg-emerald-900/30 text-emerald-400 border-emerald-500/50 shadow-[0_0_5px_#10b981]" 
                                                 : "bg-yellow-900/30 text-yellow-400 border-yellow-500/50"
                                             }`}>
-                                                {modalDetalle.data.notificado ? "SENT: TRUE" : "SENT: FALSE"}
+                                                {modalDetalle.data.notificado ? "ENTREGADO: TRUE" : "ENTREGADO: FALSE"}
                                             </span>
                                         )}
                                     </div>
@@ -697,7 +697,7 @@ const ControlDeRemitos: React.FC = () => {
                                     {modalDetalle.data.numeroRemito && (
                                         <div className="bg-slate-900 p-3 rounded-xl border border-slate-800 text-center">
                                             <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Modo</p>
-                                            <p className="text-xs font-bold text-cyan-400 font-mono mt-1 uppercase">{modalDetalle.data.esTransporte ? '🚛 External' : '🏠 Local'}</p>
+                                            <p className="text-xs font-bold text-cyan-400 font-mono mt-1 uppercase">{modalDetalle.data.esTransporte ? '🚛 Transporte' : '🏠 Local'}</p>
                                         </div>
                                     )}
                                 </div>
