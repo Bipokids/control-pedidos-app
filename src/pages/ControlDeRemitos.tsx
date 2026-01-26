@@ -47,24 +47,13 @@ const ControlDeRemitos: React.FC = () => {
     // 2. EFECTOS (CARGA DE DATOS)
     // -------------------------------------------------------------------------
     useEffect(() => {
-        const unsubRemitos = onValue(ref(db_realtime, 'remitos'), (snapshot) => {
-            setRemitos(snapshot.val() || {});
-        });
-        const unsubSoportes = onValue(ref(db_realtime, 'soportes'), (snapshot) => {
-            setSoportes(snapshot.val() || {});
-        });
-        const unsubDespachos = onValue(ref(db_realtime, 'despachos'), (snapshot) => {
-            setDespachos(snapshot.val() || {});
-        });
-        const unsubManual = onValue(ref(db_realtime, 'tablaManual'), (snapshot) => {
-            setTablaManual(snapshot.val() || {});
-        });
+        const unsubRemitos = onValue(ref(db_realtime, 'remitos'), (snapshot) => setRemitos(snapshot.val() || {}));
+        const unsubSoportes = onValue(ref(db_realtime, 'soportes'), (snapshot) => setSoportes(snapshot.val() || {}));
+        const unsubDespachos = onValue(ref(db_realtime, 'despachos'), (snapshot) => setDespachos(snapshot.val() || {}));
+        const unsubManual = onValue(ref(db_realtime, 'tablaManual'), (snapshot) => setTablaManual(snapshot.val() || {}));
 
         return () => { 
-            unsubRemitos(); 
-            unsubSoportes(); 
-            unsubDespachos(); 
-            unsubManual(); 
+            unsubRemitos(); unsubSoportes(); unsubDespachos(); unsubManual(); 
         };
     }, []);
 
@@ -72,6 +61,7 @@ const ControlDeRemitos: React.FC = () => {
     // 3. LÓGICA DE NEGOCIO Y CÁLCULOS
     // -------------------------------------------------------------------------
 
+    // Mapa de datos de despacho (choferes y firmas)
     const datosDespachoMap = React.useMemo(() => {
         const map: Record<string, { chofer: string, itemsRechazados?: any[], clienteFirma?: any }> = {};
         if (!despachos) return map;
@@ -84,6 +74,7 @@ const ControlDeRemitos: React.FC = () => {
                     itemsRechazados: d.itemsRechazados || [],
                     clienteFirma: d.clienteFirma 
                 };
+                // Mapeamos por ID único y por Número visible para asegurar match
                 if (d.remitoId) map[d.remitoId] = info;
                 if (d.soporteId) map[d.soporteId] = info;
                 if (d.numeroRemito) map[String(d.numeroRemito)] = info;
@@ -110,7 +101,6 @@ const ControlDeRemitos: React.FC = () => {
 
     const remitosFiltrados = Object.entries(remitos).filter(([_id, r]) => {
         if (r.estadoPreparacion === "Entregado") return false;
-
         const matchTexto = r.cliente?.toLowerCase().includes(filtro.toLowerCase()) || r.numeroRemito?.toString().includes(filtro);
         
         if (filtroRapido === 'sin_fecha') {
@@ -119,16 +109,15 @@ const ControlDeRemitos: React.FC = () => {
             if (r.produccion) return r.estado === "Listo" && matchTexto;
             else return r.estadoPreparacion === "Pendiente" && matchTexto;
         }
-
         if (filtroRapido === 'produccion') return r.produccion && r.estado === "Listo" && matchTexto;
         if (filtroRapido === 'listos') return r.estadoPreparacion === "Listo" && matchTexto;
-
         return matchTexto;
     });
 
     const entregadosRemitos = Object.entries(remitos)
         .filter(([_id, r]) => r.estadoPreparacion === "Entregado" || r.estadoPreparacion === "Entregado Parcial")
         .map(([id, r]) => {
+            // Intentamos recuperar info de despacho por ID o por Numero
             const info = datosDespachoMap[id] || datosDespachoMap[String(r.numeroRemito)] || {} as any;
             return { 
                 ...r, 
@@ -137,7 +126,7 @@ const ControlDeRemitos: React.FC = () => {
                 displayNumero: r.numeroRemito,
                 chofer: info.chofer || 'Sin asignar',
                 itemsRechazados: info.itemsRechazados,
-                clienteFirma: info.clienteFirma 
+                clienteFirma: info.clienteFirma // <--- Aquí se inyecta la firma
             };
         });
     
@@ -159,11 +148,10 @@ const ControlDeRemitos: React.FC = () => {
     const todosEntregados = [...entregadosRemitos, ...entregadosSoportes];
 
     // -------------------------------------------------------------------------
-    // 4. FUNCIONES AUXILIARES Y MANEJADORES
+    // 4. FUNCIONES AUXILIARES
     // -------------------------------------------------------------------------
 
     const enviarMensajeWhatsapp = (data: any, rango: string) => {
-        // ... (Lógica de WhatsApp intacta)
         const telefonoStr = data.telefono ? String(data.telefono) : "";
         const telefonoLimpio = telefonoStr.replace(/\D/g, ''); 
         
@@ -176,7 +164,6 @@ const ControlDeRemitos: React.FC = () => {
                 if (turno === "Mañana") rangoAmigable = `${dia} por la mañana`;
                 else if (turno === "Tarde") rangoAmigable = `${dia} por la tarde`;
             }
-
             const esRemito = !!data.numeroRemito;
             const numeroRef = esRemito ? data.numeroRemito : data.numeroSoporte;
             
@@ -186,16 +173,13 @@ const ControlDeRemitos: React.FC = () => {
             } else {
                 textoAccion = `estaremos entregando tu Soporte`;
             }
-
             let itemsLista = "• Varios productos";
             if (esRemito && Array.isArray(data.articulos)) {
                 itemsLista = data.articulos.map((a: any) => `• ${a.cantidad}x ${a.codigo}`).join('\n');
             } else if (!esRemito && Array.isArray(data.productos)) {
                 itemsLista = data.productos.map((p: string) => `• ${p}`).join('\n');
             }
-
             const mensaje = `Hola *${data.cliente}*. 👋\n\nNos comunicamos para informarte que el día *${rangoAmigable}* ${textoAccion} número *${numeroRef}*.\n\n📋 *Detalle:*\n${itemsLista}\n\nSaludos, *BIPOKIDS*.`;
-            
             const url = `https://web.whatsapp.com/send?phone=${telefonoFull}&text=${encodeURIComponent(mensaje)}`;
             window.open(url, '_blank');
             return true;
@@ -205,12 +189,102 @@ const ControlDeRemitos: React.FC = () => {
         }
     };
 
+    // Función para descargar el comprobante con firma
+    const generarImagenComprobante = async () => {
+        if (!modalFirma.data) return;
+        const { clienteFirma, itemsRechazados, _type } = modalFirma.data;
+        if (!clienteFirma?.firma) return alert("No hay firma disponible para generar imagen.");
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const width = 600;
+        let height = 350; 
+        
+        const rechazos = (_type === 'remito' && itemsRechazados) ? itemsRechazados : [];
+        if (rechazos.length > 0) height += 60 + (rechazos.length * 30);
+
+        canvas.width = width;
+        canvas.height = height;
+
+        // Fondo Blanco
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+
+        let currentY = 40;
+
+        // Título
+        ctx.fillStyle = '#000000';
+        ctx.font = 'bold 24px sans-serif'; 
+        ctx.textAlign = 'center'; 
+        currentY += 40;
+
+        // Firma (Imagen Base64)
+        const img = new Image();
+        img.src = `data:image/png;base64,${clienteFirma.firma}`;
+        await new Promise((resolve) => { img.onload = resolve; });
+        
+        // Ajustar imagen
+        const destW = 200; 
+        const destH = 100;
+        const sourceH = img.height * 0.75; 
+        ctx.drawImage(img, 0, 0, img.width, sourceH, (width - destW) / 2, currentY, destW, destH);
+        currentY += destH + 20;
+
+        // Datos del Cliente
+        ctx.fillStyle = '#333333';
+        ctx.font = 'bold 18px sans-serif'; 
+        ctx.fillText(`Recibió: ${clienteFirma.nombre}`, width / 2, currentY + 20);
+        ctx.font = '16px sans-serif';
+        ctx.fillStyle = '#666666';
+        ctx.fillText(`DNI: ${clienteFirma.dni}`, width / 2, currentY + 45);
+        currentY += 70; 
+
+        // Rechazos (Si existen)
+        if (rechazos.length > 0) {
+            ctx.font = 'bold 20px sans-serif'; 
+            ctx.textAlign = 'left';
+            const title = "ITEMS NO RECIBIDOS";
+            const icon = "⚠️";
+            const iconWidth = ctx.measureText(icon).width;
+            const titleWidth = ctx.measureText(title).width;
+            let startX = (width - (iconWidth + 10 + titleWidth)) / 2;
+
+            ctx.fillText(icon, startX, currentY);
+            ctx.fillStyle = '#ef4444'; 
+            ctx.fillText(title, startX + iconWidth + 10, currentY);
+            currentY += 35;
+
+            ctx.fillStyle = '#b91c1c';
+            ctx.font = 'bold 16px monospace';
+            ctx.textAlign = 'center';
+            rechazos.forEach((item: any) => {
+                ctx.fillText(`• ${item.codigo}: ${item.cantidadRechazada} un.`, width / 2, currentY);
+                currentY += 25;
+            });
+        }
+
+        canvas.toBlob(async (blob) => {
+            if (blob) {
+                try {
+                    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+                    alert("✅ Imagen de comprobante copiada al portapapeles.");
+                } catch (e) { alert("❌ Error al copiar imagen."); }
+            }
+        });
+    };
+
     const eliminarItem = (id: string, type: string) => {
         if(window.confirm("¿Eliminar este registro entregado permanentemente?")) {
             const path = type === 'remito' ? 'remitos' : 'soportes';
             remove(ref(db_realtime, `${path}/${id}`));
         }
     };
+
+    // -------------------------------------------------------------------------
+    // 5. MANEJADORES DE EVENTOS
+    // -------------------------------------------------------------------------
 
     const handleRangoChange = (remitoId: string, remitoData: any, nuevoRango: string) => {
         if (nuevoRango === "") {
@@ -266,7 +340,6 @@ const ControlDeRemitos: React.FC = () => {
     };
 
     const guardarDatos = async () => {
-        // ... (Lógica de guardado intacta)
         if (!tipoCarga) return;
         setLoading(true);
         try {
@@ -352,7 +425,7 @@ const ControlDeRemitos: React.FC = () => {
     };
 
     // -------------------------------------------------------------------------
-    // 6. RENDERIZADO (JSX) - ESTÉTICA FUTURISTA NEON
+    // 6. RENDERIZADO (JSX)
     // -------------------------------------------------------------------------
     return (
         <div className="min-h-screen relative font-sans text-cyan-50 bg-[#050b14] selection:bg-cyan-500 selection:text-black pb-20 pt-10 px-4">
@@ -376,9 +449,8 @@ const ControlDeRemitos: React.FC = () => {
                     </div>
                 </header>
 
-                {/* CONTADORES (HUD WIDGETS) */}
+                {/* CONTADORES */}
                 <div className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {/* Panel Logística */}
                     <div className="bg-[#0f172a]/60 backdrop-blur-md p-6 rounded-3xl border border-cyan-500/20 shadow-[0_0_20px_rgba(6,182,212,0.1)] relative overflow-hidden group">
                         <div className="absolute top-0 right-0 p-2 opacity-20 text-6xl select-none group-hover:opacity-30 transition-opacity">📦</div>
                         <h3 className="text-[10px] font-black text-cyan-500 uppercase tracking-[0.2em] mb-4 border-l-2 border-cyan-500 pl-2">Logística Activa</h3>
@@ -402,7 +474,6 @@ const ControlDeRemitos: React.FC = () => {
                         </div>
                     </div>
                     
-                    {/* Panel Soporte */}
                     <div className="bg-[#0f172a]/60 backdrop-blur-md p-6 rounded-3xl border border-violet-500/20 shadow-[0_0_20px_rgba(139,92,246,0.1)] relative overflow-hidden group">
                         <div className="absolute top-0 right-0 p-2 opacity-20 text-6xl select-none group-hover:opacity-30 transition-opacity">🛠️</div>
                         <h3 className="text-[10px] font-black text-violet-500 uppercase tracking-[0.2em] mb-4 border-l-2 border-violet-500 pl-2">Servicio Técnico</h3>
@@ -420,13 +491,7 @@ const ControlDeRemitos: React.FC = () => {
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                             <span className="text-cyan-700 group-focus-within:text-cyan-400 transition-colors">🔍</span>
                         </div>
-                        <input 
-                            type="text" 
-                            placeholder="BUSCAR OBJETIVO..." 
-                            value={filtro} 
-                            onChange={(e) => setFiltro(e.target.value)} 
-                            className="w-full pl-12 pr-6 py-4 bg-[#0f172a] border border-cyan-900 rounded-xl shadow-inner focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:shadow-[0_0_15px_rgba(6,182,212,0.3)] outline-none font-mono text-sm text-cyan-100 placeholder-cyan-900 transition-all uppercase tracking-wider" 
-                        />
+                        <input type="text" placeholder="BUSCAR OBJETIVO..." value={filtro} onChange={(e) => setFiltro(e.target.value)} className="w-full pl-12 pr-6 py-4 bg-[#0f172a] border border-cyan-900 rounded-xl shadow-inner focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:shadow-[0_0_15px_rgba(6,182,212,0.3)] outline-none font-mono text-sm text-cyan-100 placeholder-cyan-900 transition-all uppercase tracking-wider" />
                     </div>
                     {filtroRapido && (
                         <button onClick={() => setFiltroRapido(null)} className="px-6 py-4 bg-red-900/20 text-red-400 border border-red-900/50 rounded-xl font-mono text-xs font-bold uppercase hover:bg-red-900/40 hover:text-red-300 hover:shadow-[0_0_15px_rgba(220,38,38,0.4)] transition-all flex items-center gap-2">
@@ -435,24 +500,20 @@ const ControlDeRemitos: React.FC = () => {
                     )}
                 </section>
 
-                {/* BOTÓN COLAPSAR */}
                 <div className="flex justify-between items-center mb-4 px-2">
                     <h3 className="text-xl font-black italic uppercase text-slate-500 flex items-center gap-3 tracking-tight">
                         <span className="w-2 h-2 bg-cyan-500 rounded-full shadow-[0_0_10px_cyan]"></span>
                         Listado de Pedidos <span className="text-cyan-600 font-mono text-sm">[{remitosFiltrados.length}]</span>
                     </h3>
                     <button onClick={() => setTablaExpandida(!tablaExpandida)} className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 hover:text-cyan-300 transition-all font-mono text-[10px] uppercase text-slate-400 tracking-wider">
-                        {tablaExpandida ? 'Minimizar' : 'Maximizar'}
-                        <span className={`text-xs transition-transform duration-300 ${tablaExpandida ? 'rotate-180' : 'rotate-0'}`}>▼</span>
+                        {tablaExpandida ? 'Minimizar' : 'Maximizar'} <span className={`text-xs transition-transform duration-300 ${tablaExpandida ? 'rotate-180' : 'rotate-0'}`}>▼</span>
                     </button>
                 </div>
 
-                {/* TABLA PRINCIPAL (DATA GRID) */}
+                {/* TABLA PRINCIPAL */}
                 {tablaExpandida && (
                     <section className="bg-[#0f172a]/40 backdrop-blur-sm rounded-3xl border border-cyan-900/30 overflow-hidden mb-12 shadow-2xl relative">
-                        {/* Scanline decoration */}
                         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-500 to-transparent opacity-50"></div>
-                        
                         <div className="overflow-x-auto">
                             <table className="min-w-full text-left">
                                 <thead>
@@ -463,33 +524,23 @@ const ControlDeRemitos: React.FC = () => {
                                         <th className="p-5 text-center">Estado</th>
                                         <th className="p-5 text-center">Preparación</th>
                                         <th className="p-5 text-center">Prioridad</th>
-                                        <th className="p-5 text-center">Asignación de entrega</th>
+                                        <th className="p-5 text-center">Asignación Temporal</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-cyan-900/30 font-mono text-xs">
                                     {remitosFiltrados.map(([id, r], index) => {
-                                        // --- LÓGICA DE COLOR (HIGH CONTRAST) ---
                                         let bgClass = 'hover:bg-cyan-900/10 transition-colors bg-transparent';
                                         const sinRango = !r.rangoDespacho || r.rangoDespacho === "";
 
-                                        // Prioridad: Rojo intenso
-                                        if (r.prioridad) {
-                                            bgClass = 'bg-red-900/20 text-red-200 border-l-4 border-red-500 shadow-[inset_0_0_15px_rgba(220,38,38,0.2)]';
-                                        } 
-                                        else if (r.estadoPreparacion === 'Despachado') {
-                                            bgClass = 'bg-cyan-900/30 text-cyan-200 border-l-4 border-cyan-500';
-                                        }
+                                        if (r.prioridad) { bgClass = 'bg-red-900/20 text-red-200 border-l-4 border-red-500 shadow-[inset_0_0_15px_rgba(220,38,38,0.2)]'; } 
+                                        else if (r.estadoPreparacion === 'Despachado') { bgClass = 'bg-cyan-900/30 text-cyan-200 border-l-4 border-cyan-500'; }
                                         else if (r.produccion) {
                                             if (r.estado === 'Listo') {
                                                 if (sinRango) bgClass = 'bg-purple-900/30 text-purple-200 border-l-4 border-purple-500';
                                                 else if (r.estadoPreparacion === 'Listo') bgClass = 'bg-emerald-900/30 text-emerald-200 border-l-4 border-emerald-500 shadow-[inset_0_0_15px_rgba(16,185,129,0.1)]';
                                                 else bgClass = 'bg-yellow-900/20 text-yellow-200 border-l-4 border-yellow-500';
-                                            } else {
-                                                // En Producción (Pendiente)
-                                                bgClass = 'bg-orange-900/10 text-orange-200 hover:bg-orange-900/20';
-                                            }
+                                            } else { bgClass = 'bg-orange-900/10 text-orange-200 hover:bg-orange-900/20'; }
                                         } else {
-                                            // Sin Producción
                                             if (r.estadoPreparacion === 'Pendiente' && sinRango) bgClass = 'bg-purple-900/20 text-purple-200 border-l-4 border-purple-500';
                                             else if (r.estadoPreparacion === 'Listo') bgClass = 'bg-emerald-900/30 text-emerald-200 border-l-4 border-emerald-500 shadow-[inset_0_0_15px_rgba(16,185,129,0.1)]';
                                         }
@@ -501,9 +552,8 @@ const ControlDeRemitos: React.FC = () => {
                                                 </td>
                                                 <td className="p-5 font-sans font-bold uppercase tracking-wide text-white">
                                                     {r.cliente}
-                                                    {/* Indicadores neon intensos */}
                                                     {(r as any).telefono && <span className="ml-2 text-[10px] inline-block align-middle shadow-[0_0_5px_#10b981] bg-emerald-600 text-black px-1.5 rounded font-black border border-emerald-400">📞</span>}
-                                                    {(r as any).notificado && <span className="ml-2 text-[10px] inline-block align-middle shadow-[0_0_5px_#3b82f6] bg-blue-600 text-white px-1.5 rounded font-black border border-blue-400">✓ ENVIADO</span>}
+                                                    {(r as any).notificado && <span className="ml-2 text-[10px] inline-block align-middle shadow-[0_0_5px_#3b82f6] bg-blue-600 text-white px-1.5 rounded font-black border border-blue-400">✓ SENT</span>}
                                                 </td>
                                                 <td className="p-5 text-center"><input type="checkbox" checked={r.produccion} onChange={(e) => update(ref(db_realtime, `remitos/${id}`), { produccion: e.target.checked })} className="w-4 h-4 rounded bg-slate-800 border-slate-600 text-cyan-600 focus:ring-cyan-500 focus:ring-offset-slate-900" /></td>
                                                 <td className="p-5 text-center">
@@ -517,7 +567,7 @@ const ControlDeRemitos: React.FC = () => {
                                                 </td>
                                                 <td className="p-5 text-center">
                                                     <select value={r.rangoDespacho || ""} onChange={(e) => handleRangoChange(id, r, e.target.value)} className="bg-slate-900 border border-slate-600 rounded-lg px-2 py-1 text-[10px] font-mono text-cyan-300 uppercase outline-none focus:border-cyan-500 focus:shadow-[0_0_10px_rgba(6,182,212,0.3)] w-full max-w-[140px]">
-                                                        <option value="">-- Sin asignar --</option>
+                                                        <option value="">-- SIN ASIGNAR --</option>
                                                         {rangos.map(rng => <option key={rng} value={rng}>{rng}</option>)}
                                                     </select>
                                                 </td>
@@ -530,10 +580,8 @@ const ControlDeRemitos: React.FC = () => {
                     </section>
                 )}
 
-                {/* CRONOGRAMA SEMANAL */}
-                <h3 className="text-xl font-black italic uppercase mb-6 text-slate-500 tracking-tighter flex items-center gap-2">
-                    <span className="text-cyan-600">///</span> Cronograma de Operaciones
-                </h3>
+                {/* CRONOGRAMA */}
+                <h3 className="text-xl font-black italic uppercase mb-6 text-slate-500 tracking-tighter flex items-center gap-2"><span className="text-cyan-600">///</span> Cronograma de Operaciones</h3>
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-20">
                     {weekdays.map((dia) => (
                         <div key={dia} className="bg-[#0f172a]/60 backdrop-blur-sm rounded-2xl border border-slate-800 overflow-hidden group hover:border-cyan-500/30 transition-colors">
@@ -547,22 +595,11 @@ const ControlDeRemitos: React.FC = () => {
                                     <div key={bloque} className="p-3 border-b border-slate-800/50 min-h-[140px] last:border-0 hover:bg-slate-800/30 transition-colors relative" onDoubleClick={() => { const val = prompt(`Nota para ${match}:`); if(val) set(ref(db_realtime, `tablaManual/${diaFix}_${bloque}/${Date.now()}`), { text: val }); }}>
                                         <p className="text-[9px] font-bold text-slate-600 uppercase mb-3 tracking-widest text-center">{bloque}</p>
                                         <div className="flex flex-col gap-2">
-                                            
-                                            {/* REMITOS ITEMS (COLORES INTENSOS) */}
                                             {Object.entries(remitos).filter(([,r]) => r.rangoDespacho === match && r.estadoPreparacion !== "Entregado").map(([id,r]) => {
-                                                // Default: Naranja oscuro
                                                 let bgChip = 'bg-orange-900/60 text-orange-200 border-l-4 border-orange-500 hover:shadow-[0_0_10px_orange]';
-                                                
-                                                if (r.estadoPreparacion === 'Listo') {
-                                                    bgChip = 'bg-emerald-900/60 text-emerald-100 border-l-4 border-emerald-500 hover:shadow-[0_0_10px_#10b981]';
-                                                }
-                                                if (r.estadoPreparacion === 'Despachado') {
-                                                    bgChip = 'bg-cyan-900/60 text-cyan-100 border-l-4 border-cyan-500 hover:shadow-[0_0_10px_cyan]';
-                                                }
-                                                if (r.prioridad) {
-                                                    bgChip = 'bg-red-900/60 text-red-100 border-l-4 border-red-500 shadow-[0_0_10px_rgba(220,38,38,0.4)] animate-pulse';
-                                                }
-                                                
+                                                if (r.estadoPreparacion === 'Listo') bgChip = 'bg-emerald-900/60 text-emerald-100 border-l-4 border-emerald-500 hover:shadow-[0_0_10px_#10b981]';
+                                                if (r.estadoPreparacion === 'Despachado') bgChip = 'bg-cyan-900/60 text-cyan-100 border-l-4 border-cyan-500 hover:shadow-[0_0_10px_cyan]';
+                                                if (r.prioridad) bgChip = 'bg-red-900/60 text-red-100 border-l-4 border-red-500 shadow-[0_0_10px_rgba(220,38,38,0.4)] animate-pulse';
                                                 return (
                                                     <span key={id} onClick={() => setModalDetalle({ open: true, data: { ...r, id } })} className={`px-2 py-2 rounded-r cursor-pointer transition-all ${bgChip} flex justify-between items-center group/item border-y border-r border-white/10`}>
                                                         <span className="truncate max-w-[90%] text-[10px] font-mono font-bold">{r.cliente}</span>
@@ -570,16 +607,12 @@ const ControlDeRemitos: React.FC = () => {
                                                     </span>
                                                 );
                                             })}
-
-                                            {/* SOPORTES ITEMS (VIOLETA INTENSO) */}
                                             {Object.entries(soportes).filter(([,s]) => s.rangoEntrega === match && s.estado !== "Entregado").map(([id,s]) => (
                                                 <span key={id} onClick={() => setModalDetalle({ open: true, data: { ...s, id } })} className="px-2 py-2 rounded-r border-l-4 bg-violet-900/60 text-violet-100 border-violet-500 cursor-pointer hover:shadow-[0_0_10px_#8b5cf6] transition-all flex items-center gap-2 border-y border-r border-white/10">
                                                     <span className="text-[10px] font-mono font-bold truncate">🛠️ {s.cliente}</span>
                                                     {(s as any).notificado && <span className="text-[10px] ml-1 text-cyan-300">✓</span>}
                                                 </span>
                                             ))}
-
-                                            {/* MANUALES (AMARILLO INTENSO) */}
                                             {tablaManual[`${diaFix}_${bloque}`] && Object.entries(tablaManual[`${diaFix}_${bloque}`]).map(([mId,m]:any) => (
                                                 <span key={mId} className="px-2 py-2 rounded-r border-l-4 text-[10px] font-mono bg-yellow-900/60 text-yellow-100 border-yellow-500 flex justify-between group/manual border-y border-r border-white/10">
                                                     {m.text}
@@ -594,7 +627,7 @@ const ControlDeRemitos: React.FC = () => {
                     ))}
                 </div>
 
-                {/* HISTORIAL ENTREGADOS */}
+                {/* HISTORIAL */}
                 <section>
                     <h3 className="text-xl font-black italic uppercase mb-6 text-slate-500 flex items-center gap-2 tracking-tighter">
                         <span className="w-2 h-2 bg-emerald-500 rounded-full shadow-[0_0_10px_#10b981]"></span>
@@ -625,10 +658,10 @@ const ControlDeRemitos: React.FC = () => {
                     </div>
                 </section>
 
-                {/* FAB (Floating Action Button) */}
+                {/* FAB */}
                 <button onClick={() => setSidebarOpen(true)} className="fixed bottom-10 right-10 w-16 h-16 bg-cyan-600 text-white rounded-full shadow-[0_0_30px_rgba(8,145,178,0.6)] flex items-center justify-center text-3xl font-bold z-50 hover:scale-110 active:scale-95 transition-all border border-cyan-400 hover:bg-cyan-400 hover:text-black hover:rotate-90 duration-300">+</button>
 
-                {/* MODAL DETALLE (Estilo Neon Oscuro) */}
+                {/* MODAL DETALLE (CON FIRMA) */}
                 {modalDetalle.open && modalDetalle.data && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md" onClick={() => setModalDetalle({ open: false, data: null })}>
                         <div className="bg-[#0f172a] rounded-[2rem] p-8 w-full max-w-lg shadow-[0_0_50px_rgba(6,182,212,0.2)] border border-cyan-500/30 animate-in fade-in zoom-in duration-300 relative overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -651,12 +684,12 @@ const ControlDeRemitos: React.FC = () => {
                                                 ? "bg-emerald-900/30 text-emerald-400 border-emerald-500/50 shadow-[0_0_5px_#10b981]" 
                                                 : "bg-yellow-900/30 text-yellow-400 border-yellow-500/50"
                                             }`}>
-                                                {modalDetalle.data.notificado ? "ENTREGADO: TRUE" : "ENTREGADO: FALSE"}
+                                                {modalDetalle.data.notificado ? "SENT: TRUE" : "SENT: FALSE"}
                                             </span>
                                         )}
                                     </div>
                                     {(modalDetalle.data as any).telefono && (
-                                        <p className="text-xs font-mono text-slate-400 mt-2">COMM LINK: {(modalDetalle.data as any).telefono}</p>
+                                        <p className="text-xs font-mono text-slate-400 mt-2">Contacto: {(modalDetalle.data as any).telefono}</p>
                                     )}
                                 </div>
                                 <button onClick={() => setModalDetalle({ open: false, data: null })} className="text-slate-500 hover:text-white text-xl font-bold p-2 transition-colors">✕</button>
@@ -684,7 +717,7 @@ const ControlDeRemitos: React.FC = () => {
                                 
                                 {modalDetalle.data.aclaraciones && (
                                     <div className="bg-yellow-900/10 p-5 rounded-2xl border border-yellow-500/20 text-yellow-100">
-                                        <h4 className="text-[10px] font-black text-yellow-500 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">📝 Detalles</h4>
+                                        <h4 className="text-[10px] font-black text-yellow-500 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">📝 Aclaraciones</h4>
                                         <p className="text-xs font-mono leading-relaxed whitespace-pre-line text-yellow-200/80">{modalDetalle.data.aclaraciones}</p>
                                     </div>
                                 )}
@@ -769,7 +802,7 @@ const ControlDeRemitos: React.FC = () => {
                         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
                         <div className="relative w-full max-w-lg bg-[#050b14] h-full shadow-[-20px_0_50px_rgba(0,0,0,0.5)] border-l border-cyan-900/50 p-8 overflow-y-auto animate-in slide-in-from-right duration-300">
                             <div className="flex justify-between items-center mb-10 border-b border-cyan-900 pb-4">
-                                <h2 className="text-2xl font-black italic uppercase text-white tracking-tighter drop-shadow-[0_0_5px_cyan]">Input Data Stream</h2>
+                                <h2 className="text-2xl font-black italic uppercase text-white tracking-tighter drop-shadow-[0_0_5px_cyan]">PANEL DE CARGA</h2>
                                 <button onClick={() => setSidebarOpen(false)} className="text-slate-500 hover:text-cyan-400 text-2xl font-bold transition-colors">✕</button>
                             </div>
                             <div className="space-y-8">
@@ -783,20 +816,20 @@ const ControlDeRemitos: React.FC = () => {
                                 </div>
                                 {tipoCarga === 'remito' && (
                                     <div className="space-y-6 animate-in fade-in duration-500">
-                                        <div><label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block mb-2">Bloque de Datos Raw</label><textarea rows={6} className="w-full p-4 bg-slate-900/80 border border-slate-700 rounded-xl text-xs font-mono text-green-400 placeholder-slate-700 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none" placeholder="Paste data block here..." value={datosRemitoRaw} onChange={e => setDatosRemitoRaw(e.target.value)} /></div>
-                                        <div><label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block mb-2">Matriz de Productos</label><textarea rows={4} className="w-full p-4 bg-slate-900/80 border border-slate-700 rounded-xl text-xs font-mono text-cyan-200 placeholder-slate-700 focus:border-cyan-500 outline-none" placeholder="QTY CODE..." value={productosRaw} onChange={e => setProductosRaw(e.target.value)} /></div>
-                                        <div><label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block mb-2">Metadata Adicional</label><textarea rows={3} className="w-full p-4 bg-slate-900/80 border border-slate-700 rounded-xl text-xs font-mono text-yellow-200 placeholder-slate-700 focus:border-yellow-500 outline-none" placeholder="// Comments..." value={aclaracionesRaw} onChange={e => setAclaracionesRaw(e.target.value)} /></div>
+                                        <div><label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block mb-2">Datos del Cliente</label><textarea rows={6} className="w-full p-4 bg-slate-900/80 border border-slate-700 rounded-xl text-xs font-mono text-green-400 placeholder-slate-700 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none" placeholder="Paste data block here..." value={datosRemitoRaw} onChange={e => setDatosRemitoRaw(e.target.value)} /></div>
+                                        <div><label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block mb-2">Productos / Cantidades</label><textarea rows={4} className="w-full p-4 bg-slate-900/80 border border-slate-700 rounded-xl text-xs font-mono text-cyan-200 placeholder-slate-700 focus:border-cyan-500 outline-none" placeholder="QTY CODE..." value={productosRaw} onChange={e => setProductosRaw(e.target.value)} /></div>
+                                        <div><label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block mb-2">Aclaraciones</label><textarea rows={3} className="w-full p-4 bg-slate-900/80 border border-slate-700 rounded-xl text-xs font-mono text-yellow-200 placeholder-slate-700 focus:border-yellow-500 outline-none" placeholder="// Comments..." value={aclaracionesRaw} onChange={e => setAclaracionesRaw(e.target.value)} /></div>
                                         <div className="grid grid-cols-1 gap-3">
-                                            <label className="flex items-center gap-3 p-4 bg-slate-900/50 rounded-xl border cursor-pointer border-slate-700 hover:border-cyan-500 transition-all group"><input type="checkbox" checked={esTransporte} onChange={e => setEsTransporte(e.target.checked)} className="w-5 h-5 rounded bg-black border-slate-600 text-cyan-600 focus:ring-0" /><span className="text-[11px] font-black text-slate-400 uppercase italic group-hover:text-cyan-400 transition-colors">Ruta Externa (Transporte)</span></label>
-                                            <label className="flex items-center gap-3 p-4 bg-slate-900/50 rounded-xl border cursor-pointer border-slate-700 hover:border-green-500 transition-all group"><input type="checkbox" checked={necesitaProduccion} onChange={e => setNecesitaProduccion(e.target.checked)} className="w-5 h-5 rounded bg-black border-slate-600 text-green-600 focus:ring-0" /><span className="text-[11px] font-black text-slate-400 uppercase italic text-green-600/70 group-hover:text-green-400 transition-colors">Requiere Manufactura</span></label>
+                                            <label className="flex items-center gap-3 p-4 bg-slate-900/50 rounded-xl border cursor-pointer border-slate-700 hover:border-cyan-500 transition-all group"><input type="checkbox" checked={esTransporte} onChange={e => setEsTransporte(e.target.checked)} className="w-5 h-5 rounded bg-black border-slate-600 text-cyan-600 focus:ring-0" /><span className="text-[11px] font-black text-slate-400 uppercase italic group-hover:text-cyan-400 transition-colors">Es Transporte</span></label>
+                                            <label className="flex items-center gap-3 p-4 bg-slate-900/50 rounded-xl border cursor-pointer border-slate-700 hover:border-green-500 transition-all group"><input type="checkbox" checked={necesitaProduccion} onChange={e => setNecesitaProduccion(e.target.checked)} className="w-5 h-5 rounded bg-black border-slate-600 text-green-600 focus:ring-0" /><span className="text-[11px] font-black text-slate-400 uppercase italic text-green-600/70 group-hover:text-green-400 transition-colors">Requiere Producción</span></label>
                                         </div>
                                     </div>
                                 )}
                                 {tipoCarga === 'soporte' && (
                                     <div className="space-y-4 animate-in fade-in duration-500">
                                         <input type="text" placeholder="ID REF" className="w-full p-4 bg-slate-900/80 rounded-xl font-bold font-mono uppercase text-sm border border-slate-700 text-white focus:border-violet-500 outline-none" value={soporteData.numero} onChange={e => setSoporteData({...soporteData, numero: e.target.value})} />
-                                        <input type="text" placeholder="CLIENTE ENTIDAD" className="w-full p-4 bg-slate-900/80 rounded-xl font-bold font-mono uppercase text-sm border border-slate-700 text-white focus:border-violet-500 outline-none" value={soporteData.cliente} onChange={e => setSoporteData({...soporteData, cliente: e.target.value})} />
-                                        <input type="text" placeholder="COMM LINK (OPCIONAL)" className="w-full p-4 bg-slate-900/80 rounded-xl font-bold font-mono uppercase text-sm border border-slate-700 text-white focus:border-violet-500 outline-none" value={soporteData.telefono} onChange={e => setSoporteData({...soporteData, telefono: e.target.value})} />
+                                        <input type="text" placeholder="NOMBRE CLIENTE" className="w-full p-4 bg-slate-900/80 rounded-xl font-bold font-mono uppercase text-sm border border-slate-700 text-white focus:border-violet-500 outline-none" value={soporteData.cliente} onChange={e => setSoporteData({...soporteData, cliente: e.target.value})} />
+                                        <input type="text" placeholder="CONTACTO (OPCIONAL)" className="w-full p-4 bg-slate-900/80 rounded-xl font-bold font-mono uppercase text-sm border border-slate-700 text-white focus:border-violet-500 outline-none" value={soporteData.telefono} onChange={e => setSoporteData({...soporteData, telefono: e.target.value})} />
                                         <input type="date" className="w-full p-4 bg-slate-900/80 rounded-xl font-bold text-sm border border-slate-700 uppercase text-slate-400 focus:text-white outline-none" value={soporteData.fecha} onChange={e => setSoporteData({...soporteData, fecha: e.target.value})} />
                                         <textarea rows={5} placeholder="COMPONENTES..." className="w-full p-4 bg-slate-900/80 rounded-xl border border-slate-700 font-bold font-mono uppercase text-sm text-violet-300 outline-none focus:border-violet-500" value={soporteData.productos} onChange={e => setSoporteData({...soporteData, productos: e.target.value})} />
                                     </div>
@@ -810,6 +843,60 @@ const ControlDeRemitos: React.FC = () => {
                         </div>
                     </div>
                 )}
+
+                {/* ---------------------------------------------------------- */}
+            {/* BLOQUE MODAL FIRMA (PEGAR AL FINAL DEL RETURN)             */}
+            {/* ---------------------------------------------------------- */}
+            {modalFirma.open && modalFirma.data && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md" onClick={() => setModalFirma({ open: false, data: null, type: 'remito' })}>
+                    <div className="bg-[#0f172a] rounded-[2rem] p-8 w-full max-w-lg shadow-[0_0_50px_rgba(6,182,212,0.2)] border border-cyan-500/30 animate-in zoom-in duration-300 relative overflow-hidden" onClick={e => e.stopPropagation()}>
+                        
+                        {/* Decorative Top Line */}
+                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-600"></div>
+
+                        <div className="text-center mb-8">
+                            <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]">
+                                Firma Digital
+                            </h3>
+                            <p className="text-xs font-mono text-cyan-400 uppercase tracking-[0.2em] mt-1">Comprobante de Recepción</p>
+                        </div>
+                        
+                        {modalFirma.data.clienteFirma ? (
+                            <div className="space-y-6">
+                                {/* Contenedor de la firma (Fondo blanco para contraste) */}
+                                <div className="border-2 border-dashed border-slate-700 rounded-2xl p-4 bg-white flex justify-center shadow-inner relative group">
+                                    <img 
+                                        src={`data:image/png;base64,${modalFirma.data.clienteFirma.firma}`} 
+                                        alt="Firma Cliente" 
+                                        className="max-h-32 object-contain" 
+                                    />
+                                    <div className="absolute top-2 right-2 text-[8px] font-black text-slate-300 uppercase tracking-widest">Digital Sign</div>
+                                </div>
+
+                                <div className="text-center space-y-1 bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                                    <p className="font-bold text-white text-lg uppercase font-mono tracking-wide">{modalFirma.data.clienteFirma.nombre}</p>
+                                    <p className="text-xs font-bold text-slate-500 font-mono uppercase">DNI / ID: <span className="text-cyan-400">{modalFirma.data.clienteFirma.dni}</span></p>
+                                </div>
+
+                                <button 
+                                    onClick={generarImagenComprobante} 
+                                    className="w-full py-4 bg-cyan-600 text-black rounded-xl font-black font-mono uppercase tracking-widest hover:bg-cyan-400 transition-all shadow-[0_0_20px_rgba(6,182,212,0.4)] active:scale-95 flex items-center justify-center gap-2 group/btn"
+                                >
+                                    <span className="text-lg group-hover/btn:scale-110 transition-transform">📸</span> 
+                                    Copiar firma
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="p-10 text-center text-slate-500 font-mono font-bold border-2 border-dashed border-slate-800 rounded-xl bg-black/20">
+                                <p className="mb-2 text-2xl">⚠️</p>
+                                <p>DATA ERROR: Firma no disponible.</p>
+                            </div>
+                        )}
+
+                        <button onClick={() => setModalFirma({ open: false, data: null, type: 'remito' })} className="absolute top-4 right-4 text-slate-500 hover:text-white font-bold text-xl transition-colors">✕</button>
+                    </div>
+                </div>
+            )}
             </div>
         </div>
     );
