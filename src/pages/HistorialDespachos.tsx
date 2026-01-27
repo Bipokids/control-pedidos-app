@@ -265,7 +265,7 @@ const HistorialDespachos: React.FC = () => {
                                                         <div className="flex justify-between items-start mb-4 pr-10">
                                                             <div>
                                                                 <div className="flex items-center gap-2 mb-1">
-                                                                    <span className="text-[9px] font-black bg-violet-900/40 text-violet-300 border border-violet-500/30 px-2 py-0.5 rounded uppercase font-mono tracking-widest">S-TEC</span>
+                                                                    <span className="text-[9px] font-black bg-violet-900/40 text-violet-300 border border-violet-500/30 px-2 py-0.5 rounded uppercase font-mono tracking-widest">SOPORTE</span>
                                                                     <span className="text-sm font-black text-white font-mono tracking-wide">#{item.numero}</span>
                                                                 </div>
                                                                 <h3 className="font-bold text-slate-300 uppercase tracking-wide truncate max-w-[250px]">{item.cliente}</h3>
