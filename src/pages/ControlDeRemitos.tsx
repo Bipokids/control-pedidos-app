@@ -786,7 +786,7 @@ const ControlDeRemitos: React.FC = () => {
                                     onClick={() => confirmarAsignacion(true)}
                                     className="w-full p-4 bg-emerald-500 text-black rounded-xl font-bold font-mono shadow-[0_0_15px_#10b981] hover:bg-emerald-400 transition-all flex items-center justify-center gap-2 uppercase text-sm"
                                 >
-                                    <span>💬</span> Asignar + Enviar
+                                    <span>💬</span> Asignar y Notificar
                                 </button>
                                 
                                 <button 
