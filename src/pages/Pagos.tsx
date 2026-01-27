@@ -177,7 +177,7 @@ const Pagos: React.FC = () => {
                                                 </span>
                                             ) : (
                                                 <span className="bg-emerald-900/40 text-emerald-400 px-3 py-1 rounded text-[10px] font-black uppercase tracking-wide font-mono border border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.3)] animate-pulse">
-                                                    NEW INPUT
+                                                    Nuevo pago
                                                 </span>
                                             )}
                                             
