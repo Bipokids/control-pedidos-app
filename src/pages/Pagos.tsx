@@ -226,7 +226,7 @@ const Pagos: React.FC = () => {
                                                 onClick={() => marcarRegistrado(pago.id)}
                                                 className="flex-1 py-3 bg-emerald-600 text-black rounded-xl font-black font-mono uppercase text-[10px] tracking-widest hover:bg-emerald-400 transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:shadow-[0_0_25px_rgba(16,185,129,0.5)] active:scale-95"
                                             >
-                                                ✅ Confirm Deposit
+                                                ✅ Pago registrado
                                             </button>
                                         )}
                                         
