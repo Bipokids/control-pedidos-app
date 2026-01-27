@@ -342,10 +342,10 @@ const Devoluciones: React.FC = () => {
                                                 <div>
                                                     <div className="flex items-center gap-2 mb-1">
                                                         <span className="text-[9px] font-black bg-slate-800 text-slate-400 border border-slate-700 px-2 py-0.5 rounded uppercase font-mono tracking-wide">REF: {d.venta}</span>
-                                                        {d.tieneCosto && <span className="text-[9px] font-black bg-red-900/30 text-red-400 border border-red-500/30 px-2 py-0.5 rounded uppercase font-mono tracking-wide">COST: ${d.costo}</span>}
+                                                        {d.tieneCosto && <span className="text-[9px] font-black bg-red-900/30 text-red-400 border border-red-500/30 px-2 py-0.5 rounded uppercase font-mono tracking-wide">COSTO: ${d.costo}</span>}
                                                     </div>
                                                     <p className="font-bold text-slate-200 text-sm uppercase tracking-wide">{d.producto}</p>
-                                                    <p className="text-[10px] text-violet-400 font-bold uppercase tracking-widest mt-1 font-mono">REASON: {d.motivo}</p>
+                                                    <p className="text-[10px] text-violet-400 font-bold uppercase tracking-widest mt-1 font-mono">MOTIVO: {d.motivo}</p>
                                                 </div>
                                                 <button 
                                                     onClick={() => { if(window.confirm("Purge this record?")) remove(ref(db_realtime, `devoluciones/${d.id}`)); }}
