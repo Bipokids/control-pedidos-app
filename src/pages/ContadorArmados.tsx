@@ -62,6 +62,7 @@ const ContadorArmados: React.FC = () => {
 
             let tipoSuma: 'pendiente' | 'listo' | 'despachado' | null = null;
 
+            // Lógica de estados
             if (estado === "PENDIENTE" && estadoPrep === "PENDIENTE") {
                 tipoSuma = 'pendiente';
             }
@@ -71,7 +72,10 @@ const ContadorArmados: React.FC = () => {
             else if (estado === "LISTO" && estadoPrep === "LISTO") {
                 tipoSuma = 'listo';
             }
-            else if (estado === "DESPACHADO" && estadoPrep === "DESPACHADO") {
+            // --- CORRECCIÓN AQUÍ ---
+            // Aceptamos que si la preparación está DESPACHADA, cuente como despachado
+            // aunque el estado administrativo haya quedado en LISTO o sea DESPACHADO.
+            else if ((estado === "DESPACHADO" || estado === "LISTO") && estadoPrep === "DESPACHADO") {
                 tipoSuma = 'despachado';
             }
 
@@ -80,6 +84,8 @@ const ContadorArmados: React.FC = () => {
                     const codigoArt = normalize(art.codigo);
                     const cantidad = Number(art.cantidad || 0);
 
+                    // Nota: Aquí solo estás sumando a los contadores individuales si es PENDIENTE.
+                    // Si quisieras ver conteos individuales de despachados, deberías quitar el if interno.
                     if (nuevosConteos.hasOwnProperty(codigoArt)) {
                         if (tipoSuma === 'pendiente') {
                             nuevosConteos[codigoArt] += cantidad;
