@@ -449,12 +449,18 @@ const ControlDeRemitos: React.FC = () => {
                     </div>
                 </header>
 
-                {/* CONTADORES */}
+                {/* CONTADORES (HUD WIDGETS) */}
                 <div className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+                    
+                    {/* Panel Logística */}
                     <div className="bg-[#0f172a]/60 backdrop-blur-md p-6 rounded-3xl border border-cyan-500/20 shadow-[0_0_20px_rgba(6,182,212,0.1)] relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-2 opacity-20 text-6xl select-none group-hover:opacity-30 transition-opacity">📦</div>
-                        <h3 className="text-[10px] font-black text-cyan-500 uppercase tracking-[0.2em] mb-4 border-l-2 border-cyan-500 pl-2">Logística Activa</h3>
-                        <div className="grid grid-cols-4 gap-3">
+                        {/* ICONO CAJA: Solo Iluminación y Escala (Sin rotación) */}
+                        <div className="absolute top-0 right-0 p-4 opacity-20 text-6xl select-none transition-all duration-500 ease-out group-hover:opacity-70 group-hover:scale-110 group-hover:drop-shadow-[0_0_35px_rgba(34,211,238,0.9)]">
+                            📦
+                        </div>
+                        
+                        <h3 className="text-[10px] font-black text-cyan-500 uppercase tracking-[0.2em] mb-4 border-l-2 border-cyan-500 pl-2 relative z-10">Logística Activa</h3>
+                        <div className="grid grid-cols-4 gap-3 relative z-10">
                             <StatCard label="Pendientes" val={rPendientes} color="border-orange-500" textColor="text-orange-400" />
                             <StatCard 
                                 label="Producción" val={rProduccion} color="border-yellow-400" textColor="text-yellow-400"
@@ -474,10 +480,15 @@ const ControlDeRemitos: React.FC = () => {
                         </div>
                     </div>
                     
+                    {/* Panel Soporte */}
                     <div className="bg-[#0f172a]/60 backdrop-blur-md p-6 rounded-3xl border border-violet-500/20 shadow-[0_0_20px_rgba(139,92,246,0.1)] relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-2 opacity-20 text-6xl select-none group-hover:opacity-30 transition-opacity">🛠️</div>
-                        <h3 className="text-[10px] font-black text-violet-500 uppercase tracking-[0.2em] mb-4 border-l-2 border-violet-500 pl-2">Servicio Técnico</h3>
-                        <div className="grid grid-cols-3 gap-3">
+                        {/* ICONO HERRAMIENTAS: Solo Iluminación y Escala (Sin rotación) */}
+                        <div className="absolute top-0 right-0 p-4 opacity-20 text-6xl select-none transition-all duration-500 ease-out group-hover:opacity-70 group-hover:scale-110 group-hover:drop-shadow-[0_0_35px_rgba(139,92,246,0.9)]">
+                            🛠️
+                        </div>
+
+                        <h3 className="text-[10px] font-black text-violet-500 uppercase tracking-[0.2em] mb-4 border-l-2 border-violet-500 pl-2 relative z-10">Servicio Técnico</h3>
+                        <div className="grid grid-cols-3 gap-3 relative z-10">
                             <StatCard label="Pendientes" val={sPendientes} color="border-orange-500" textColor="text-orange-400" />
                             <StatCard label="Resueltos" val={sResueltos} color="border-emerald-500" textColor="text-emerald-400" />
                             <StatCard label="Sin Fecha" val={sResueltosSinFecha} color="border-purple-500" textColor="text-purple-400" />
