@@ -441,10 +441,10 @@ const ControlDeRemitos: React.FC = () => {
                                 PANEL DE CONTROL
                             </span>
                         </h1>
-                        <p className="text-cyan-600 font-mono text-xs uppercase tracking-[0.3em]">Sistema de Logística Avanzada v.9.0</p>
+                        <p className="text-cyan-600 font-mono text-xs uppercase tracking-[0.3em]">Sistema de Logística BIPOKIDS v.9.0</p>
                     </div>
                     <div className="hidden md:block text-right font-mono">
-                        <p className="text-[10px] text-cyan-800 uppercase tracking-widest mb-1">Stardate</p>
+                        <p className="text-[10px] text-cyan-800 uppercase tracking-widest mb-1">Fecha</p>
                         <p className="text-lg font-bold text-cyan-300 drop-shadow-[0_0_5px_rgba(6,182,212,0.8)]">{new Date().toLocaleDateString()}</p>
                     </div>
                 </header>
@@ -518,13 +518,13 @@ const ControlDeRemitos: React.FC = () => {
                             <table className="min-w-full text-left">
                                 <thead>
                                     <tr className="bg-slate-900/80 text-cyan-600 font-mono text-[10px] uppercase tracking-[0.2em] border-b border-cyan-900">
-                                        <th className="p-5">ID Ref</th>
-                                        <th className="p-5">Entidad / Cliente</th>
+                                        <th className="p-5">Remito</th>
+                                        <th className="p-5">Cliente</th>
                                         <th className="p-5 text-center">Producción</th>
                                         <th className="p-5 text-center">Estado</th>
                                         <th className="p-5 text-center">Preparación</th>
                                         <th className="p-5 text-center">Prioridad</th>
-                                        <th className="p-5 text-center">Asignación Temporal</th>
+                                        <th className="p-5 text-center">Asignación Entrega</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-cyan-900/30 font-mono text-xs">
