@@ -64,7 +64,10 @@ const NavButton: React.FC<NavButtonProps> = ({ active, onClick, icon, label, ale
 const AppContent = () => {
   const { user, role, logout } = useAuth();
   const [paginaActual, setPaginaActual] = useState<string>('produccion');
+  
+  // Estados de Alerta
   const [retirosPendientes, setRetirosPendientes] = useState(0);
+  const [pagosPendientes, setPagosPendientes] = useState(0); // NUEVO
 
   useEffect(() => {
     if (role !== 'admin') return;
@@ -72,10 +75,19 @@ const AppContent = () => {
     const unsubscribe = onValue(ref(db_realtime, 'soportesypagos'), (snapshot) => {
         if (snapshot.exists()) {
             const data = snapshot.val();
-            const count = Object.values(data).filter((item: any) => item.tipo === "Soporte").length;
-            setRetirosPendientes(count);
+            const items = Object.values(data);
+            
+            // Contar Soportes
+            const countSoportes = items.filter((item: any) => item.tipo === "Soporte").length;
+            setRetirosPendientes(countSoportes);
+
+            // Contar Pagos Pendientes de Registro
+            const countPagos = items.filter((item: any) => item.tipo === "Pago" && item.estado !== "Registrado").length;
+            setPagosPendientes(countPagos);
+            
         } else {
             setRetirosPendientes(0);
+            setPagosPendientes(0);
         }
     });
 
@@ -98,7 +110,7 @@ const AppContent = () => {
     };
     
     const titulo = nombres[paginaActual] || 'App';
-    document.title = `${titulo} | Gestión Bipokids`;
+    document.title = `${titulo} | Nebula Control`;
   }, [paginaActual]);
 
   useEffect(() => {
@@ -111,6 +123,9 @@ const AppContent = () => {
 
   if (!user) return <Login />;
 
+  // Determinar si hay alguna alerta activa para la pestaña lateral
+  const hayAlertas = retirosPendientes > 0 || pagosPendientes > 0;
+
   return (
     <div className="flex min-h-screen bg-[#050b14] font-sans selection:bg-cyan-500 selection:text-black overflow-x-hidden">
       <style>{globalStyles}</style>
@@ -119,21 +134,18 @@ const AppContent = () => {
       <div className="fixed inset-0 z-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, #1e293b 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
 
       {/* --- SIDEBAR NAVIGATION (Furtivo) --- */}
-      {/* Ajustado: -translate-x-[calc(100%-14px)] para dejar 14px visibles */}
       <nav className="fixed top-0 left-0 h-full w-28 bg-[#0f172a]/95 backdrop-blur-xl border-r border-cyan-500/30 shadow-[10px_0_30px_rgba(0,0,0,0.8)] z-50 transition-transform duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] -translate-x-[calc(100%-14px)] hover:translate-x-0 group overflow-y-auto scrollbar-hide flex flex-col items-center py-8 gap-4">
         
-        {/* --- PESTAÑA / INDICADOR VISUAL (Visible cuando está cerrado) --- */}
-        {/* Ajustado: w-[14px] para coincidir con la parte visible */}
+        {/* --- PESTAÑA / INDICADOR VISUAL --- */}
         <div className="absolute right-0 top-0 h-full w-[14px] flex flex-col justify-center items-center pointer-events-none">
-            
             {/* Línea vertical guía de fondo */}
-            <div className={`w-[1px] h-full transition-colors duration-500 ${retirosPendientes > 0 ? 'bg-red-900/60' : 'bg-cyan-900/20'}`}></div>
+            <div className={`w-[1px] h-full transition-colors duration-500 ${hayAlertas ? 'bg-red-900/60' : 'bg-cyan-900/20'}`}></div>
 
-            {/* EL "MANGO" o PESTAÑA CENTRAL (Más grueso: w-[6px]) */}
+            {/* EL "MANGO" o PESTAÑA CENTRAL */}
             <div className={`absolute right-[4px] w-[6px] rounded-full transition-all duration-500 ease-in-out group-hover:opacity-0 shadow-lg ${
-                retirosPendientes > 0 
-                ? 'h-32 bg-red-500 shadow-[0_0_25px_red] animate-pulse' // Estado ALERTA (Rojo, grande y pulsante)
-                : 'h-16 bg-cyan-500 shadow-[0_0_15px_cyan]' // Estado NORMAL (Cian)
+                hayAlertas 
+                ? 'h-32 bg-red-500 shadow-[0_0_25px_red] animate-pulse' // Estado ALERTA
+                : 'h-16 bg-cyan-500 shadow-[0_0_15px_cyan]' // Estado NORMAL
             }`}></div>
         </div>
 
@@ -158,7 +170,13 @@ const AppContent = () => {
                     alertCount={retirosPendientes} 
                 />
                 <NavButton active={paginaActual === 'historial'} onClick={() => setPaginaActual('historial')} icon="🗂️" label="Despachos" />
-                <NavButton active={paginaActual === 'pagos'} onClick={() => setPaginaActual('pagos')} icon="💰" label="Pagos" />
+                <NavButton 
+                    active={paginaActual === 'pagos'} 
+                    onClick={() => setPaginaActual('pagos')} 
+                    icon="💰" 
+                    label="Pagos" 
+                    alertCount={pagosPendientes} // NUEVA ALERTA
+                />
                 <NavButton active={paginaActual === 'estadisticas'} onClick={() => setPaginaActual('estadisticas')} icon="📊" label="Métricas" />
             </>
             )}
@@ -202,7 +220,6 @@ const AppContent = () => {
       </nav>
 
       {/* MAIN CONTENT */}
-      {/* ml-4 deja un pequeño margen para no chocar con la pestaña */}
       <main className="flex-1 ml-4 transition-all duration-300 relative z-10 w-full">
         
         {role === 'admin' && (
