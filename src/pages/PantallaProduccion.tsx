@@ -126,7 +126,7 @@ const PantallaProduccion: React.FC = () => {
                                 {/* TÍTULO */}
                                 <div className="mb-4 pr-8 relative z-10">
                                     <div className="flex items-center gap-2 mb-1">
-                                        <span className="text-[10px] font-mono text-slate-300 uppercase tracking-widest opacity-80">ID Ref</span>
+                                        <span className="text-[10px] font-mono text-slate-300 uppercase tracking-widest opacity-80">Remito</span>
                                         <span className="font-black text-xl italic text-white font-mono drop-shadow-md tracking-wider">#{r.numeroRemito}</span>
                                     </div>
                                     <span className="block text-base font-black uppercase tracking-wide text-white truncate drop-shadow-sm">{r.cliente}</span>

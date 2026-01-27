@@ -85,7 +85,7 @@ const Pagos: React.FC = () => {
                 <header className="mb-12 flex flex-col xl:flex-row justify-between items-end gap-6 border-b border-emerald-900/50 pb-6">
                     <div>
                         <h1 className="text-4xl font-black text-white tracking-tighter mb-2 uppercase drop-shadow-[0_0_10px_rgba(16,185,129,0.3)]">
-                            FINANCE <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-500">CONTROL</span>
+                            CONTROL <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-500">PAGOS</span>
                         </h1>
                         <p className="text-emerald-600 font-mono text-xs uppercase tracking-[0.3em]">Módulo de Rendición de Valores</p>
                     </div>
@@ -158,7 +158,7 @@ const Pagos: React.FC = () => {
                                     <div className="flex justify-between items-start mb-6 border-b border-emerald-900/30 pb-4">
                                         <div>
                                             <div className="flex items-center gap-2 mb-2">
-                                                <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest font-mono">Entidad</p>
+                                                <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest font-mono">Cliente</p>
                                                 {/* Badge Sobre Cerrado */}
                                                 {sobreCerrado && (
                                                     <span className="bg-amber-900/30 text-amber-400 px-2 py-0.5 rounded text-[9px] font-black uppercase flex items-center gap-1 border border-amber-500/50 shadow-[0_0_5px_rgba(251,191,36,0.2)] animate-pulse">

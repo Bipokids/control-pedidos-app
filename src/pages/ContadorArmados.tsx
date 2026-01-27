@@ -156,7 +156,7 @@ const ContadorArmados: React.FC = () => {
                             onClick={() => setModalOpen(true)}
                             className="px-6 py-3 bg-[#0f172a] border border-cyan-500/50 rounded-xl shadow-[0_0_15px_rgba(6,182,212,0.1)] hover:shadow-[0_0_25px_rgba(6,182,212,0.3)] text-cyan-400 font-bold font-mono text-xs flex items-center gap-2 transition-all active:scale-95 uppercase tracking-widest hover:bg-cyan-900/20 hover:text-white"
                         >
-                            <span className="text-lg">⚙️</span> SYSTEM CONFIG
+                            <span className="text-lg">⚙️</span> CONFIGURACIÓN
                         </button>
                     </div>
                 </header>

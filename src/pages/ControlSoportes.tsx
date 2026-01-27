@@ -233,8 +233,8 @@ const ControlSoportes: React.FC<Props> = ({ onNavigate }) => {
                         <table className="w-full text-left">
                             <thead>
                                 <tr className="bg-slate-900/80 text-violet-400 font-mono text-[10px] uppercase tracking-[0.2em] border-b border-violet-900/50">
-                                    <th className="p-5">ID Ref</th>
-                                    <th className="p-5">Entidad / Cliente</th>
+                                    <th className="p-5">Soporte</th>
+                                    <th className="p-5">Cliente</th>
                                     <th className="p-5">Ingreso</th>
                                     <th className="p-5 w-1/3">Componentes</th>
                                     <th className="p-5 text-center">Diagnóstico</th>
