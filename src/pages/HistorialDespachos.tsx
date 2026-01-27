@@ -234,7 +234,7 @@ const HistorialDespachos: React.FC = () => {
 
                                                         {/* Productos Entregados */}
                                                         <div className="text-xs border-t border-slate-800 pt-3">
-                                                            <p className="font-black text-slate-500 uppercase text-[9px] mb-2 tracking-widest">Manifest Cargo:</p>
+                                                            <p className="font-black text-slate-500 uppercase text-[9px] mb-2 tracking-widest">Detalles de envío:</p>
                                                             <ul className="grid grid-cols-2 gap-x-2 gap-y-1 font-mono">
                                                                 {Object.entries(item.productosMap || {}).map(([prod, cant]) => (
                                                                     <li key={prod} className="text-slate-400">
