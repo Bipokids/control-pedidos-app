@@ -540,18 +540,28 @@ const ControlDeRemitos: React.FC = () => {
                                 </thead>
                                 <tbody className="divide-y divide-cyan-900/30 font-mono text-xs">
                                     {remitosFiltrados.map(([id, r], index) => {
+                                        // --- LÓGICA DE COLOR (HIGH CONTRAST) ---
                                         let bgClass = 'hover:bg-cyan-900/10 transition-colors bg-transparent';
                                         const sinRango = !r.rangoDespacho || r.rangoDespacho === "";
 
-                                        if (r.prioridad) { bgClass = 'bg-red-900/20 text-red-200 border-l-4 border-red-500 shadow-[inset_0_0_15px_rgba(220,38,38,0.2)]'; } 
-                                        else if (r.estadoPreparacion === 'Despachado') { bgClass = 'bg-cyan-900/30 text-cyan-200 border-l-4 border-cyan-500'; }
+                                        // Prioridad: Rojo intenso
+                                        if (r.prioridad) {
+                                            bgClass = 'bg-red-900/20 text-red-200 border-l-4 border-red-500 shadow-[inset_0_0_15px_rgba(220,38,38,0.2)]';
+                                        } 
+                                        else if (r.estadoPreparacion === 'Despachado') {
+                                            bgClass = 'bg-cyan-900/30 text-cyan-200 border-l-4 border-cyan-500';
+                                        }
                                         else if (r.produccion) {
                                             if (r.estado === 'Listo') {
                                                 if (sinRango) bgClass = 'bg-purple-900/30 text-purple-200 border-l-4 border-purple-500';
                                                 else if (r.estadoPreparacion === 'Listo') bgClass = 'bg-emerald-900/30 text-emerald-200 border-l-4 border-emerald-500 shadow-[inset_0_0_15px_rgba(16,185,129,0.1)]';
                                                 else bgClass = 'bg-yellow-900/20 text-yellow-200 border-l-4 border-yellow-500';
-                                            } else { bgClass = 'bg-orange-900/10 text-orange-200 hover:bg-orange-900/20'; }
+                                            } else {
+                                                // En Producción (Pendiente)
+                                                bgClass = 'bg-orange-900/10 text-orange-200 hover:bg-orange-900/20';
+                                            }
                                         } else {
+                                            // Sin Producción
                                             if (r.estadoPreparacion === 'Pendiente' && sinRango) bgClass = 'bg-purple-900/20 text-purple-200 border-l-4 border-purple-500';
                                             else if (r.estadoPreparacion === 'Listo') bgClass = 'bg-emerald-900/30 text-emerald-200 border-l-4 border-emerald-500 shadow-[inset_0_0_15px_rgba(16,185,129,0.1)]';
                                         }
@@ -563,6 +573,7 @@ const ControlDeRemitos: React.FC = () => {
                                                 </td>
                                                 <td className="p-5 font-sans font-bold uppercase tracking-wide text-white">
                                                     {r.cliente}
+                                                    {/* Indicadores neon intensos */}
                                                     {(r as any).telefono && <span className="ml-2 text-[10px] inline-block align-middle shadow-[0_0_5px_#10b981] bg-emerald-600 text-black px-1.5 rounded font-black border border-emerald-400">📞</span>}
                                                     {(r as any).notificado && <span className="ml-2 text-[10px] inline-block align-middle shadow-[0_0_5px_#3b82f6] bg-blue-600 text-white px-1.5 rounded font-black border border-blue-400">✓ SENT</span>}
                                                 </td>
@@ -570,9 +581,18 @@ const ControlDeRemitos: React.FC = () => {
                                                 <td className="p-5 text-center">
                                                     {r.produccion && <span className={`px-3 py-1 rounded-sm text-[10px] font-black uppercase tracking-wider border ${r.estado === 'Listo' ? 'bg-emerald-600 text-black border-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-yellow-600/80 text-black border-yellow-400'}`}>{r.estado || 'PENDIENTE'}</span>}
                                                 </td>
+                                                
+                                                {/* COLUMNA PREPARACIÓN CORREGIDA */}
                                                 <td className="p-5 text-center">
-                                                    <span className={`px-3 py-1 rounded-sm text-[10px] font-black uppercase tracking-wider border ${r.estadoPreparacion === 'Listo' ? 'bg-emerald-600 text-black border-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-slate-800 text-slate-400 border-slate-600'}`}>{r.estadoPreparacion || 'PENDIENTE'}</span>
+                                                    {(!sinRango || r.estadoPreparacion === 'Listo' || r.estadoPreparacion === 'Despachado') ? (
+                                                        <span className={`px-3 py-1 rounded-sm text-[10px] font-black uppercase tracking-wider border ${r.estadoPreparacion === 'Listo' ? 'bg-emerald-600 text-black border-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-slate-800 text-slate-400 border-slate-600'}`}>
+                                                            {r.estadoPreparacion || 'PENDIENTE'}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-[10px] text-slate-700 font-mono font-bold">-</span>
+                                                    )}
                                                 </td>
+
                                                 <td className="p-5 text-center">
                                                     <button onClick={() => update(ref(db_realtime, `remitos/${id}`), { prioridad: !r.prioridad })} className={`text-lg transition-all active:scale-90 hover:scale-110 ${r.prioridad ? 'grayscale-0 drop-shadow-[0_0_8px_red] animate-pulse' : 'grayscale opacity-20'}`}>🔥</button>
                                                 </td>
@@ -669,8 +689,40 @@ const ControlDeRemitos: React.FC = () => {
                     </div>
                 </section>
 
-                {/* FAB */}
-                <button onClick={() => setSidebarOpen(true)} className="fixed bottom-10 right-10 w-16 h-16 bg-cyan-600 text-white rounded-full shadow-[0_0_30px_rgba(8,145,178,0.6)] flex items-center justify-center text-3xl font-bold z-50 hover:scale-110 active:scale-95 transition-all border border-cyan-400 hover:bg-cyan-400 hover:text-black hover:rotate-90 duration-300">+</button>
+                {/* FAB - QUANTUM DATA UPLINK */}
+                <button 
+                    onClick={() => setSidebarOpen(true)} 
+                    className="fixed bottom-10 right-10 z-50 group outline-none"
+                    title="Iniciar Carga de Datos"
+                >
+                    {/* 1. Campo de energía externo (Resplandor pulsante) */}
+                    <div className="absolute inset-0 rounded-[1.5rem] bg-cyan-500/20 blur-md group-hover:blur-xl group-hover:bg-cyan-400/40 transition-all duration-500 scale-110 group-hover:scale-125 opacity-50 group-hover:opacity-100 animate-pulse-slow"></div>
+                    
+                    {/* 2. Estructura del Reactor (Squircle técnico) */}
+                    <div className="relative w-16 h-16 bg-[#050b14] rounded-2xl border-[1.5px] border-cyan-500/60 flex items-center justify-center shadow-[inset_0_0_15px_rgba(6,182,212,0.2)] overflow-hidden group-hover:border-cyan-300 group-hover:shadow-[inset_0_0_30px_rgba(6,182,212,0.6),0_0_25px_rgba(6,182,212,0.5)] transition-all duration-300 active:scale-95">
+                        
+                        {/* Escáner de luz de fondo */}
+                        <div className="absolute inset-0 w-full h-full bg-gradient-to-t from-transparent via-cyan-400/10 to-transparent translate-y-full group-hover:-translate-y-full transition-transform duration-1000 ease-in-out"></div>
+                        
+                        {/* ÍCONO SVG: TRANSMISIÓN DE DATOS ANIMADA */}
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8 text-cyan-500 relative z-10 transition-all duration-500 group-hover:text-cyan-200 group-hover:drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]">
+                            {/* Anillo de energía exterior giratorio */}
+                            <circle cx="12" cy="12" r="10" strokeDasharray="12 8" className="opacity-40 animate-[spin_6s_linear_infinite] group-hover:opacity-80" />
+                            
+                            {/* Base de datos */}
+                            <path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" className="opacity-60" />
+                            
+                            {/* Núcleo de carga central (Se eleva al hacer hover) */}
+                            <g className="group-hover:-translate-y-1.5 transition-transform duration-500 ease-out">
+                                <path d="M12 15V3" strokeWidth="1.5" className="group-hover:stroke-white"/>
+                                <path d="m8 7 4-4 4 4" strokeWidth="1.5" className="group-hover:stroke-white"/>
+                                {/* Partículas de datos ascendentes */}
+                                <circle cx="9" cy="12" r="0.5" className="fill-cyan-400 animate-pulse" />
+                                <circle cx="15" cy="10" r="0.5" className="fill-cyan-400 animate-pulse delay-150" />
+                            </g>
+                        </svg>
+                    </div>
+                </button>
 
                 {/* MODAL DETALLE (CON FIRMA) */}
                 {modalDetalle.open && modalDetalle.data && (
