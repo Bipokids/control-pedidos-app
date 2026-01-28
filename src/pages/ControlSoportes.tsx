@@ -255,7 +255,7 @@ const ControlSoportes: React.FC<Props> = ({ onNavigate }) => {
                                                 <td className="p-5 uppercase font-bold text-slate-300">
                                                     {s.cliente}
                                                     {/* Indicador visual de teléfono */}
-                                                    {(s as any).telefono && <span className="ml-2 text-[10px] inline-block align-middle shadow-[0_0_5px_#10b981] bg-emerald-500/20 text-emerald-400 px-1.5 rounded border border-emerald-500/50">📞 LINK</span>}
+                                                    {(s as any).telefono && <span className="ml-2 text-[10px] inline-block align-middle shadow-[0_0_5px_#10b981] bg-emerald-500/20 text-emerald-400 px-1.5 rounded border border-emerald-500/50">📞 CONTACTO</span>}
                                                 </td>
                                                 <td className="p-5 text-slate-500 text-[10px]">{s.fechaSoporte}</td>
                                                 <td className="p-5 text-xs text-slate-400 font-normal truncate max-w-xs uppercase" title={renderProductos(s.productos)}>
