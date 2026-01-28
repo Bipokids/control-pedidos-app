@@ -540,7 +540,7 @@ const ControlDeRemitos: React.FC = () => {
                                 </thead>
                                 <tbody className="divide-y divide-cyan-900/30 font-mono text-xs">
                                     {remitosFiltrados.map(([id, r], index) => {
-                                        // --- LÓGICA DE COLOR (HIGH CONTRAST) ---
+                                        // --- LÓGICA DE COLOR FILAS (HIGH CONTRAST) ---
                                         let bgClass = 'hover:bg-cyan-900/10 transition-colors bg-transparent';
                                         const sinRango = !r.rangoDespacho || r.rangoDespacho === "";
 
@@ -565,6 +565,17 @@ const ControlDeRemitos: React.FC = () => {
                                             if (r.estadoPreparacion === 'Pendiente' && sinRango) bgClass = 'bg-purple-900/20 text-purple-200 border-l-4 border-purple-500';
                                             else if (r.estadoPreparacion === 'Listo') bgClass = 'bg-emerald-900/30 text-emerald-200 border-l-4 border-emerald-500 shadow-[inset_0_0_15px_rgba(16,185,129,0.1)]';
                                         }
+
+                                        // --- LÓGICA DE COLOR BADGE PREPARACIÓN ---
+                                        let prepBadgeClass = '';
+                                        if (r.estadoPreparacion === 'Listo') {
+                                            prepBadgeClass = 'bg-emerald-600 text-black border-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.5)]';
+                                        } else if (r.estadoPreparacion === 'Despachado') {
+                                            prepBadgeClass = 'bg-cyan-600 text-black border-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.5)]';
+                                        } else {
+                                            // Pendiente (Naranja)
+                                            prepBadgeClass = 'bg-orange-600/80 text-white border-orange-400 shadow-[0_0_10px_rgba(251,146,60,0.5)]';
+                                        }
                                         
                                         return (
                                             <tr key={id} className={`group ${bgClass}`}>
@@ -582,10 +593,10 @@ const ControlDeRemitos: React.FC = () => {
                                                     {r.produccion && <span className={`px-3 py-1 rounded-sm text-[10px] font-black uppercase tracking-wider border ${r.estado === 'Listo' ? 'bg-emerald-600 text-black border-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-yellow-600/80 text-black border-yellow-400'}`}>{r.estado || 'PENDIENTE'}</span>}
                                                 </td>
                                                 
-                                                {/* COLUMNA PREPARACIÓN CORREGIDA */}
+                                                {/* COLUMNA PREPARACIÓN CON NUEVOS COLORES */}
                                                 <td className="p-5 text-center">
                                                     {(!sinRango || r.estadoPreparacion === 'Listo' || r.estadoPreparacion === 'Despachado') ? (
-                                                        <span className={`px-3 py-1 rounded-sm text-[10px] font-black uppercase tracking-wider border ${r.estadoPreparacion === 'Listo' ? 'bg-emerald-600 text-black border-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-slate-800 text-slate-400 border-slate-600'}`}>
+                                                        <span className={`px-3 py-1 rounded-sm text-[10px] font-black uppercase tracking-wider border ${prepBadgeClass}`}>
                                                             {r.estadoPreparacion || 'PENDIENTE'}
                                                         </span>
                                                     ) : (
@@ -598,7 +609,7 @@ const ControlDeRemitos: React.FC = () => {
                                                 </td>
                                                 <td className="p-5 text-center">
                                                     <select value={r.rangoDespacho || ""} onChange={(e) => handleRangoChange(id, r, e.target.value)} className="bg-slate-900 border border-slate-600 rounded-lg px-2 py-1 text-[10px] font-mono text-cyan-300 uppercase outline-none focus:border-cyan-500 focus:shadow-[0_0_10px_rgba(6,182,212,0.3)] w-full max-w-[140px]">
-                                                        <option value="">-- SIN ASIGNAR --</option>
+                                                        <option value="">-- NULL --</option>
                                                         {rangos.map(rng => <option key={rng} value={rng}>{rng}</option>)}
                                                     </select>
                                                 </td>

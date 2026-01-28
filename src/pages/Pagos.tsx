@@ -11,6 +11,14 @@ const Pagos: React.FC = () => {
     const [filtroFecha, setFiltroFecha] = useState("");
     const [fechasDisponibles, setFechasDisponibles] = useState<string[]>([]);
 
+    // --- Estado para el Modal de Control ---
+    const [modalControl, setModalControl] = useState<{ open: boolean, pago: any | null }>({ open: false, pago: null });
+    const [valoresControl, setValoresControl] = useState({
+        realEfectivo: "",
+        realCheques: "",
+        observaciones: ""
+    });
+
     useEffect(() => {
         const unsubscribe = onValue(ref(db_realtime, 'soportesypagos'), (snapshot) => {
             if (snapshot.exists()) {
@@ -18,11 +26,10 @@ const Pagos: React.FC = () => {
                 const lista = Object.entries(data)
                     .map(([id, val]: any) => ({ ...val, id }))
                     .filter((item: any) => item.tipo === "Pago")
-                    .sort((a, b) => (a.estado === 'Registrado' ? 1 : -1)); // Ordenar: Pendientes primero
+                    .sort((a, b) => (a.estado === 'Registrado' ? 1 : -1)); 
                 
                 setPagos(lista);
 
-                // Extraer fechas únicas
                 const fechasUnicas = Array.from(new Set(lista.map((p: any) => p.fecha?.split(' ')[0]))).sort().reverse();
                 setFechasDisponibles(fechasUnicas as string[]);
             } else {
@@ -42,20 +49,97 @@ const Pagos: React.FC = () => {
         return matchCliente && matchFecha;
     });
 
-    // --- ACCIONES ---
-    const marcarRegistrado = async (id: string) => {
-        if (window.confirm("¿Confirmar que este pago ha sido ingresado en caja?")) {
-            try {
-                await update(ref(db_realtime, `soportesypagos/${id}`), {
-                    estado: "Registrado",
-                    fechaRegistro: new Date().toISOString()
-                });
-            } catch (error) {
-                alert("Error al actualizar.");
-            }
+    // --- LÓGICA DEL MODAL Y CÁLCULOS ---
+
+    // 1. Convertir string con puntos a número puro para cálculos (ej: "1.000" -> 1000)
+    const limpiarValor = (valor: any) => {
+        if (!valor) return 0;
+        const valorString = String(valor).replace(/\./g, ''); // Elimina puntos
+        return parseFloat(valorString) || 0;
+    };
+
+    // 2. Convertir número o string a formato visual con puntos (ej: 1000 -> "1.000")
+    const formatearMiles = (valor: any) => {
+        if (!valor) return "";
+        // Primero limpiamos para asegurar que solo formateamos números
+        const numero = limpiarValor(valor);
+        return new Intl.NumberFormat('es-AR').format(numero);
+    };
+
+    // Handler para inputs: Formatea automáticamente mientras escribes
+    const handleInputMoneda = (valor: string, campo: 'realEfectivo' | 'realCheques') => {
+        // Permitir vaciar el input
+        if (valor === "") {
+            setValoresControl(prev => ({ ...prev, [campo]: "" }));
+            return;
+        }
+        // Solo permitir números
+        const soloNumeros = valor.replace(/\D/g, ''); 
+        // Formatear y guardar
+        const valorFormateado = new Intl.NumberFormat('es-AR').format(parseInt(soloNumeros));
+        setValoresControl(prev => ({ ...prev, [campo]: valorFormateado }));
+    };
+
+    const abrirModalControl = (pago: any) => {
+        // Al abrir, cargamos los valores formateados con puntos
+        setValoresControl({
+            realEfectivo: formatearMiles(pago.montoEfectivo), 
+            realCheques: formatearMiles(pago.montoCheque),
+            observaciones: ""
+        });
+        setModalControl({ open: true, pago });
+    };
+
+    const confirmarControl = async () => {
+        if (!modalControl.pago) return;
+
+        // Limpiamos los puntos antes de calcular
+        const declaradoEfec = limpiarValor(modalControl.pago.montoEfectivo);
+        const declaradoCheq = limpiarValor(modalControl.pago.montoCheque);
+        
+        const realEfec = limpiarValor(valoresControl.realEfectivo);
+        const realCheq = limpiarValor(valoresControl.realCheques);
+
+        const totalDeclarado = declaradoEfec + declaradoCheq;
+        const totalReal = realEfec + realCheq;
+        const diferencia = totalReal - totalDeclarado;
+
+        let estadoArqueo = "Ok";
+        if (diferencia < 0) estadoArqueo = "Faltante";
+        if (diferencia > 0) estadoArqueo = "Excedente";
+
+        try {
+            await update(ref(db_realtime, `soportesypagos/${modalControl.pago.id}`), {
+                estado: "Registrado",
+                fechaRegistro: new Date().toISOString(),
+                arqueo: {
+                    estado: estadoArqueo,
+                    diferencia: diferencia,
+                    realEfectivo: realEfec,
+                    realCheques: realCheq,
+                    observaciones: valoresControl.observaciones
+                }
+            });
+            setModalControl({ open: false, pago: null });
+        } catch (error) {
+            alert("Error al actualizar el registro.");
         }
     };
 
+    // Cálculos auxiliares para el renderizado en vivo del modal
+    const calcularDiferenciaUI = () => {
+        if (!modalControl.pago) return { diff: 0, color: 'text-slate-400', label: 'Sin cambios' };
+        
+        const decl = limpiarValor(modalControl.pago.montoEfectivo) + limpiarValor(modalControl.pago.montoCheque);
+        const real = limpiarValor(valoresControl.realEfectivo) + limpiarValor(valoresControl.realCheques);
+        const diff = real - decl;
+
+        if (diff === 0) return { diff: 0, color: 'text-emerald-400', label: '✅ PERFECTO' };
+        if (diff < 0) return { diff, color: 'text-red-500', label: '⚠️ FALTANTE' };
+        return { diff, color: 'text-blue-400', label: '💎 EXCEDENTE' };
+    };
+
+    // --- ACCIONES ---
     const eliminarPago = async (id: string) => {
         if (window.confirm("⚠️ PROTOCOLO DE ELIMINACIÓN: ¿Estás seguro de borrar este registro financiero?")) {
             try {
@@ -66,9 +150,11 @@ const Pagos: React.FC = () => {
         }
     };
 
-    const formatMoney = (val: string | undefined) => {
+    const formatMoney = (val: string | number | undefined) => {
         if (!val) return "$ 0";
-        return `$ ${val}`;
+        // Convertimos a número si viene como string para formatear bien
+        const num = typeof val === 'string' ? limpiarValor(val) : val;
+        return `$ ${num.toLocaleString('es-AR')}`;
     };
 
     if (loading) return <div className="min-h-screen bg-[#050b14] flex items-center justify-center"><div className="text-cyan-500 font-mono animate-pulse">SYNCING FINANCIAL DATA...</div></div>;
@@ -141,6 +227,7 @@ const Pagos: React.FC = () => {
                             const estadoControl = pago.estadoControl || "A Controlar"; 
                             const esControlado = estadoControl === "Controlado";
                             const sobreCerrado = pago.sobreCerrado || false;
+                            const arqueo = pago.arqueo;
                             
                             return (
                                 <div 
@@ -172,9 +259,16 @@ const Pagos: React.FC = () => {
                                         </div>
                                         <div className="text-right flex flex-col gap-2 items-end">
                                             {esRegistrado ? (
-                                                <span className="bg-slate-800 text-slate-400 px-3 py-1 rounded text-[10px] font-black uppercase tracking-wide font-mono border border-slate-700">
-                                                    REGISTRADO
-                                                </span>
+                                                <div className="flex flex-col items-end">
+                                                    <span className="bg-slate-800 text-slate-400 px-3 py-1 rounded text-[10px] font-black uppercase tracking-wide font-mono border border-slate-700">
+                                                        REGISTRADO
+                                                    </span>
+                                                    {arqueo && arqueo.estado !== "Ok" && (
+                                                        <span className={`text-[9px] mt-1 font-black uppercase ${arqueo.estado === "Faltante" ? "text-red-500" : "text-blue-400"}`}>
+                                                            {arqueo.estado} ({formatMoney(arqueo.diferencia)})
+                                                        </span>
+                                                    )}
+                                                </div>
                                             ) : (
                                                 <span className="bg-emerald-900/40 text-emerald-400 px-3 py-1 rounded text-[10px] font-black uppercase tracking-wide font-mono border border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.3)] animate-pulse">
                                                     Nuevo pago
@@ -223,10 +317,10 @@ const Pagos: React.FC = () => {
                                     <div className="flex gap-3 mt-auto">
                                         {!esRegistrado && (
                                             <button 
-                                                onClick={() => marcarRegistrado(pago.id)}
+                                                onClick={() => abrirModalControl(pago)}
                                                 className="flex-1 py-3 bg-emerald-600 text-black rounded-xl font-black font-mono uppercase text-[10px] tracking-widest hover:bg-emerald-400 transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:shadow-[0_0_25px_rgba(16,185,129,0.5)] active:scale-95"
                                             >
-                                                ✅ Pago registrado
+                                                ✅ Controlar y Registrar
                                             </button>
                                         )}
                                         
@@ -248,6 +342,97 @@ const Pagos: React.FC = () => {
                         })}
                     </div>
                 )}
+
+                {/* MODAL DE CONTROL Y ARQUEO */}
+                {modalControl.open && modalControl.pago && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+                        <div className="bg-[#0f172a] rounded-[2rem] w-full max-w-md border border-emerald-900 shadow-[0_0_50px_rgba(16,185,129,0.15)] overflow-hidden relative animate-in zoom-in duration-200">
+                            
+                            {/* Decorative Top */}
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-cyan-500"></div>
+
+                            <div className="p-8">
+                                <h2 className="text-2xl font-black text-white uppercase italic mb-1 tracking-tighter">Arqueo de Caja</h2>
+                                <p className="text-xs font-mono text-emerald-500 uppercase tracking-widest mb-6">Verificación de valores recibidos</p>
+
+                                <div className="space-y-6">
+                                    {/* INPUT EFECTIVO */}
+                                    <div>
+                                        <div className="flex justify-between text-[10px] font-bold uppercase mb-2 tracking-wide">
+                                            <span className="text-slate-400">Declarado: <span className="text-white">{formatMoney(modalControl.pago.montoEfectivo)}</span></span>
+                                            <span className="text-emerald-500">Efectivo Real</span>
+                                        </div>
+                                        <div className="relative group">
+                                            <span className="absolute left-4 top-4 text-emerald-700 group-focus-within:text-emerald-400">💵</span>
+                                            <input 
+                                                type="text" 
+                                                className="w-full pl-12 pr-4 py-4 bg-slate-900/50 border border-slate-700 rounded-xl text-white font-mono font-bold focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all"
+                                                value={valoresControl.realEfectivo}
+                                                onChange={e => handleInputMoneda(e.target.value, 'realEfectivo')}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* INPUT CHEQUES */}
+                                    <div>
+                                        <div className="flex justify-between text-[10px] font-bold uppercase mb-2 tracking-wide">
+                                            <span className="text-slate-400">Declarado: <span className="text-white">{formatMoney(modalControl.pago.montoCheque)}</span></span>
+                                            <span className="text-cyan-500">Cheques Real</span>
+                                        </div>
+                                        <div className="relative group">
+                                            <span className="absolute left-4 top-4 text-cyan-700 group-focus-within:text-cyan-400">🏦</span>
+                                            <input 
+                                                type="text" 
+                                                className="w-full pl-12 pr-4 py-4 bg-slate-900/50 border border-slate-700 rounded-xl text-white font-mono font-bold focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all"
+                                                value={valoresControl.realCheques}
+                                                onChange={e => handleInputMoneda(e.target.value, 'realCheques')}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* RESULTADO DINÁMICO */}
+                                    <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 flex justify-between items-center">
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Resultado Arqueo</span>
+                                        <div className="text-right">
+                                            <p className={`text-sm font-black uppercase tracking-wide ${calcularDiferenciaUI().color}`}>
+                                                {calcularDiferenciaUI().label}
+                                            </p>
+                                            {calcularDiferenciaUI().diff !== 0 && (
+                                                <p className="text-xs font-mono text-white mt-1">Diferencia: {formatMoney(calcularDiferenciaUI().diff)}</p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* OBSERVACIONES */}
+                                    <textarea 
+                                        rows={2}
+                                        placeholder="Observaciones del control..."
+                                        className="w-full p-4 bg-slate-900/30 border border-slate-800 rounded-xl text-xs text-slate-300 font-mono outline-none focus:border-slate-600 resize-none"
+                                        value={valoresControl.observaciones}
+                                        onChange={e => setValoresControl({...valoresControl, observaciones: e.target.value})}
+                                    />
+
+                                    {/* BOTONES */}
+                                    <div className="grid grid-cols-2 gap-4 pt-2">
+                                        <button 
+                                            onClick={() => setModalControl({ open: false, pago: null })}
+                                            className="py-4 rounded-xl border border-slate-700 text-slate-400 font-bold uppercase text-xs hover:bg-slate-800 transition-colors"
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button 
+                                            onClick={confirmarControl}
+                                            className="py-4 bg-emerald-600 text-black rounded-xl font-black uppercase text-xs tracking-widest hover:bg-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all"
+                                        >
+                                            Confirmar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
             </div>
         </div>
     );
