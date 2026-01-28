@@ -609,7 +609,7 @@ const ControlDeRemitos: React.FC = () => {
                                                 </td>
                                                 <td className="p-5 text-center">
                                                     <select value={r.rangoDespacho || ""} onChange={(e) => handleRangoChange(id, r, e.target.value)} className="bg-slate-900 border border-slate-600 rounded-lg px-2 py-1 text-[10px] font-mono text-cyan-300 uppercase outline-none focus:border-cyan-500 focus:shadow-[0_0_10px_rgba(6,182,212,0.3)] w-full max-w-[140px]">
-                                                        <option value="">-- NULL --</option>
+                                                        <option value="">-- SIN ASIGNAR --</option>
                                                         {rangos.map(rng => <option key={rng} value={rng}>{rng}</option>)}
                                                     </select>
                                                 </td>
