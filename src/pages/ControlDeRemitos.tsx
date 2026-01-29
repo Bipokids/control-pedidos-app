@@ -189,87 +189,112 @@ const ControlDeRemitos: React.FC = () => {
         }
     };
 
-    // Función para descargar el comprobante con firma
+    // Función para descargar el comprobante con firma (Optimizado: Sin duplicados, sin márgenes extra)
     const generarImagenComprobante = async () => {
         if (!modalFirma.data) return;
         const { clienteFirma, itemsRechazados, _type } = modalFirma.data;
         if (!clienteFirma?.firma) return alert("No hay firma disponible para generar imagen.");
 
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        const width = 600;
-        let height = 350; 
-        
-        const rechazos = (_type === 'remito' && itemsRechazados) ? itemsRechazados : [];
-        if (rechazos.length > 0) height += 60 + (rechazos.length * 30);
-
-        canvas.width = width;
-        canvas.height = height;
-
-        // Fondo Blanco
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, width, height);
-
-        let currentY = 40;
-
-        // Título
-        ctx.fillStyle = '#000000';
-        ctx.font = 'bold 24px sans-serif'; 
-        ctx.textAlign = 'center'; 
-        currentY += 40;
-
-        // Firma (Imagen Base64)
+        // 1. Cargar imagen
         const img = new Image();
         img.src = `data:image/png;base64,${clienteFirma.firma}`;
         await new Promise((resolve) => { img.onload = resolve; });
+
+        // --- LÓGICA DE RECORTE (CROP) ---
+        // Asumimos que la firma está en la parte superior y el texto pequeño (duplicado) abajo.
+        // Usaremos solo el 60% superior de la imagen original para eliminar ese texto.
+        const sourceCropHeight = img.height * 0.60; 
+
+        // --- DIMENSIONES DEL CANVAS (Reducido un 40%) ---
+        const width = 360; // Antes 600/500 -> Ahora 360 (Compacto)
         
-        // Ajustar imagen
-        const destW = 200; 
-        const destH = 100;
-        const sourceH = img.height * 0.75; 
-        ctx.drawImage(img, 0, 0, img.width, sourceH, (width - destW) / 2, currentY, destW, destH);
-        currentY += destH + 20;
+        // Calcular altura de la firma manteniendo proporción
+        // Usamos sourceCropHeight para el cálculo de aspecto
+        const maxSigH = 100; 
+        const scale = Math.min((width - 20) / img.width, maxSigH / sourceCropHeight);
+        const finalSigW = img.width * scale;
+        const finalSigH = sourceCropHeight * scale;
 
-        // Datos del Cliente
-        ctx.fillStyle = '#333333';
-        ctx.font = 'bold 18px sans-serif'; 
-        ctx.fillText(`Recibió: ${clienteFirma.nombre}`, width / 2, currentY + 20);
-        ctx.font = '16px sans-serif';
-        ctx.fillStyle = '#666666';
-        ctx.fillText(`DNI: ${clienteFirma.dni}`, width / 2, currentY + 45);
-        currentY += 70; 
-
-        // Rechazos (Si existen)
+        // Calcular altura dinámica total con márgenes ajustados (Tight layout)
+        // PadTop(10) + Firma(finalSigH) + Gap(5) + Nombre(20) + DNI(18) + PadBot(15)
+        let dynamicHeight = 10 + finalSigH + 5 + 20 + 18 + 15;
+        
+        const rechazos = (_type === 'remito' && itemsRechazados) ? itemsRechazados : [];
         if (rechazos.length > 0) {
-            ctx.font = 'bold 20px sans-serif'; 
+            dynamicHeight += 30; // Espacio título
+            dynamicHeight += (rechazos.length * 20); // Items más compactos
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = dynamicHeight;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        // --- DIBUJAR ---
+
+        // Fondo Blanco
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, dynamicHeight);
+
+        let currentY = 10; // Margen superior mínimo
+
+        // 1. DIBUJAR FIRMA (RECORTADA)
+        // sHeight = sourceCropHeight (esto recorta el texto viejo)
+        ctx.drawImage(
+            img, 
+            0, 0, img.width, sourceCropHeight, // Source Rectangle (Solo parte superior)
+            (width - finalSigW) / 2, currentY, finalSigW, finalSigH // Destination Rectangle
+        );
+        currentY += finalSigH + 5; // Gap mínimo
+
+        // 2. DATOS DEL CLIENTE (Nuevos, claros)
+        ctx.textAlign = 'center';
+        
+        ctx.fillStyle = '#0f172a'; // Slate-900 (Más oscuro y nítido)
+        ctx.font = 'bold 18px sans-serif'; 
+        ctx.fillText(`${clienteFirma.nombre}`, width / 2, currentY + 15);
+        currentY += 20;
+        
+        ctx.fillStyle = '#64748b'; // Slate-500
+        ctx.font = '600 14px sans-serif'; 
+        ctx.fillText(`DNI: ${clienteFirma.dni}`, width / 2, currentY + 15);
+        currentY += 25;
+
+        // 3. RECHAZOS (Si existen)
+        if (rechazos.length > 0) {
+            // Línea separadora
+            ctx.strokeStyle = '#e2e8f0';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(20, currentY);
+            ctx.lineTo(width - 20, currentY);
+            ctx.stroke();
+            currentY += 20;
+
             ctx.textAlign = 'left';
-            const title = "ITEMS NO RECIBIDOS";
-            const icon = "⚠️";
-            const iconWidth = ctx.measureText(icon).width;
-            const titleWidth = ctx.measureText(title).width;
-            let startX = (width - (iconWidth + 10 + titleWidth)) / 2;
-
-            ctx.fillText(icon, startX, currentY);
+            const startX = 30;
+            
             ctx.fillStyle = '#ef4444'; 
-            ctx.fillText(title, startX + iconWidth + 10, currentY);
-            currentY += 35;
+            ctx.font = 'bold 12px sans-serif';
+            ctx.fillText("ITEMS NO RECIBIDOS:", startX, currentY);
+            currentY += 15;
 
-            ctx.fillStyle = '#b91c1c';
-            ctx.font = 'bold 16px monospace';
-            ctx.textAlign = 'center';
+            ctx.fillStyle = '#334155';
+            ctx.font = '11px monospace';
             rechazos.forEach((item: any) => {
-                ctx.fillText(`• ${item.codigo}: ${item.cantidadRechazada} un.`, width / 2, currentY);
-                currentY += 25;
+                ctx.fillText(`• ${item.cantidadRechazada}x ${item.codigo}`, startX + 5, currentY);
+                currentY += 15;
             });
         }
 
+        // Generar Blob
         canvas.toBlob(async (blob) => {
             if (blob) {
                 try {
                     await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-                    alert("✅ Imagen de comprobante copiada al portapapeles.");
+                    alert("✅ Imagen compacta copiada.");
                 } catch (e) { alert("❌ Error al copiar imagen."); }
             }
         });
