@@ -623,7 +623,7 @@ const ControlDeRemitos: React.FC = () => {
                 )}
 
                 {/* CRONOGRAMA */}
-                <h3 className="text-xl font-black italic uppercase mb-6 text-slate-500 tracking-tighter flex items-center gap-2"><span className="text-cyan-600">///</span> Cronograma de Operaciones</h3>
+                <h3 className="text-xl font-black italic uppercase mb-6 text-slate-500 tracking-tighter flex items-center gap-2"><span className="text-cyan-600">///</span> Cronograma de Entregas</h3>
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-20">
                     {weekdays.map((dia) => (
                         <div key={dia} className="bg-[#0f172a]/60 backdrop-blur-sm rounded-2xl border border-slate-800 overflow-hidden group hover:border-cyan-500/30 transition-colors">
