@@ -760,17 +760,17 @@ const ControlDeRemitos: React.FC = () => {
                     </div>
                 </button>
 
-                {/* MODAL DETALLE (CON FIRMA) */}
+                {/* MODAL DETALLE (CON FIRMA Y EDICIÓN DE TELÉFONO) */}
                 {modalDetalle.open && modalDetalle.data && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md" onClick={() => setModalDetalle({ open: false, data: null })}>
-                        <div className="bg-[#0f172a] rounded-[2rem] p-8 w-full max-w-lg shadow-[0_0_50px_rgba(6,182,212,0.2)] border border-cyan-500/30 animate-in fade-in zoom-in duration-300 relative overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                        <div className="bg-[#0f172a] rounded-[2rem] p-6 w-full max-w-lg shadow-[0_0_50px_rgba(6,182,212,0.2)] border border-cyan-500/30 animate-in fade-in zoom-in duration-300 relative overflow-hidden flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
                             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500 to-purple-600"></div>
 
                             {/* HEADER */}
-                            <div className="flex justify-between items-start mb-6 border-b border-slate-800 pb-4">
-                                <div>
-                                    <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]">{modalDetalle.data.cliente}</h3>
-                                    <div className="flex gap-2 items-center mt-2">
+                            <div className="flex justify-between items-start mb-4 border-b border-slate-800 pb-4 shrink-0">
+                                <div className="flex-1 mr-4">
+                                    <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter drop-shadow-[0_0_5px_rgba(255,255,255,0.5)] truncate">{modalDetalle.data.cliente}</h3>
+                                    <div className="flex gap-2 items-center mt-2 flex-wrap">
                                         {modalDetalle.data.numeroRemito ? (
                                             <p className="text-cyan-400 font-mono font-bold text-sm bg-cyan-900/30 px-2 py-1 rounded border border-cyan-500/30">ID: {modalDetalle.data.numeroRemito}</p>
                                         ) : (
@@ -787,14 +787,41 @@ const ControlDeRemitos: React.FC = () => {
                                             </span>
                                         )}
                                     </div>
-                                    {(modalDetalle.data as any).telefono && (
-                                        <p className="text-xs font-mono text-slate-400 mt-2">Contacto: {(modalDetalle.data as any).telefono}</p>
-                                    )}
+                                    
+                                    {/* SECCIÓN DE CONTACTO EDITABLE */}
+                                    <div className="flex items-center gap-2 mt-2 group/edit">
+                                        <p className="text-xs font-mono text-slate-400">
+                                            Contacto: <span className="text-white font-bold tracking-wide">{(modalDetalle.data as any).telefono || "Sin registrar"}</span>
+                                        </p>
+                                        <button 
+                                            onClick={() => {
+                                                const nuevoTel = prompt("Ingresa el nuevo número de contacto (solo números):", (modalDetalle.data as any).telefono || "");
+                                                if (nuevoTel !== null) {
+                                                    const telLimpio = nuevoTel.replace(/\D/g, ''); // Solo números
+                                                    const path = modalDetalle.data.numeroRemito ? 'remitos' : 'soportes';
+                                                    const id = (modalDetalle.data as any).id;
+                                                    
+                                                    // Actualizar en Firebase
+                                                    update(ref(db_realtime, `${path}/${id}`), { telefono: telLimpio });
+                                                    
+                                                    // Actualizar estado local del modal para reflejar cambio inmediato
+                                                    setModalDetalle(prev => ({
+                                                        ...prev,
+                                                        data: { ...prev.data, telefono: telLimpio }
+                                                    }));
+                                                }
+                                            }}
+                                            className="text-slate-600 hover:text-cyan-400 transition-colors p-1 rounded-md hover:bg-slate-800"
+                                            title="Editar teléfono"
+                                        >
+                                            ✏️
+                                        </button>
+                                    </div>
                                 </div>
                                 <button onClick={() => setModalDetalle({ open: false, data: null })} className="text-slate-500 hover:text-white text-xl font-bold p-2 transition-colors">✕</button>
                             </div>
 
-                            {/* BODY */}
+                            {/* BODY (Scrollable) */}
                             <div className="space-y-6 overflow-y-auto pr-2 custom-scrollbar flex-1 min-h-0">
                                 <div className="bg-slate-900/50 p-5 rounded-2xl border border-slate-800">
                                     <h4 className="text-[10px] font-black text-cyan-600 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">📦 Detalle de envío</h4>
@@ -836,8 +863,10 @@ const ControlDeRemitos: React.FC = () => {
                             </div>
 
                             {/* ACTIONS */}
-                            <div className="mt-6 flex flex-col gap-3">
-                                {(modalDetalle.data as any).telefono && (modalDetalle.data.numeroRemito || modalDetalle.data.rangoEntrega) && (
+                            <div className="mt-4 flex flex-col gap-3 shrink-0">
+                                {/* Botón de WhatsApp se muestra siempre si es remito o soporte con rango, 
+                                    pero validará si hay teléfono al hacer click */}
+                                {(modalDetalle.data.numeroRemito || modalDetalle.data.rangoEntrega) && (
                                     <button 
                                         onClick={notificarDesdeDetalle}
                                         className={`w-full p-4 rounded-xl font-mono text-sm font-bold uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2 ${
