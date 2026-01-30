@@ -895,53 +895,147 @@ const ControlDeRemitos: React.FC = () => {
                     </div>
                 )}
 
-                {/* SIDEBAR DE CARGA */}
-                {sidebarOpen && (
-                    <div className="fixed inset-0 z-[100] flex justify-end">
-                        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
-                        <div className="relative w-full max-w-lg bg-[#050b14] h-full shadow-[-20px_0_50px_rgba(0,0,0,0.5)] border-l border-cyan-900/50 p-8 overflow-y-auto animate-in slide-in-from-right duration-300">
-                            <div className="flex justify-between items-center mb-10 border-b border-cyan-900 pb-4">
-                                <h2 className="text-2xl font-black italic uppercase text-white tracking-tighter drop-shadow-[0_0_5px_cyan]">PANEL DE CARGA</h2>
-                                <button onClick={() => setSidebarOpen(false)} className="text-slate-500 hover:text-cyan-400 text-2xl font-bold transition-colors">✕</button>
+                {/* SIDEBAR DE CARGA - LOGIC UPDATE */}
+            {sidebarOpen && (
+                <div className="fixed inset-0 z-[100] flex justify-end">
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
+                    <div className="relative w-full max-w-lg bg-[#050b14] h-full shadow-[-20px_0_50px_rgba(0,0,0,0.5)] border-l border-cyan-900/50 p-8 overflow-y-auto animate-in slide-in-from-right duration-300">
+                        <div className="flex justify-between items-center mb-10 border-b border-cyan-900 pb-4">
+                            <h2 className="text-2xl font-black italic uppercase text-white tracking-tighter drop-shadow-[0_0_5px_cyan]">PANEL DE CARGA</h2>
+                            <button onClick={() => setSidebarOpen(false)} className="text-slate-500 hover:text-cyan-400 text-2xl font-bold transition-colors">✕</button>
+                        </div>
+                        <div className="space-y-8">
+                            <div>
+                                <label className="text-[10px] font-mono text-cyan-600 uppercase tracking-widest block mb-2">Protocolo de Carga</label>
+                                <select value={tipoCarga} onChange={(e) => setTipoCarga(e.target.value as any)} className="w-full p-4 bg-slate-900/50 border border-slate-700 rounded-xl font-bold font-mono uppercase text-sm text-cyan-100 outline-none focus:border-cyan-500 focus:shadow-[0_0_15px_rgba(6,182,212,0.2)] transition-all">
+                                    <option value="">-- SELECCIONAR --</option>
+                                    <option value="remito">Remito</option>
+                                    <option value="soporte">Soporte</option>
+                                </select>
                             </div>
-                            <div className="space-y-8">
-                                <div>
-                                    <label className="text-[10px] font-mono text-cyan-600 uppercase tracking-widest block mb-2">Protocolo de Carga</label>
-                                    <select value={tipoCarga} onChange={(e) => setTipoCarga(e.target.value as any)} className="w-full p-4 bg-slate-900/50 border border-slate-700 rounded-xl font-bold font-mono uppercase text-sm text-cyan-100 outline-none focus:border-cyan-500 focus:shadow-[0_0_15px_rgba(6,182,212,0.2)] transition-all">
-                                        <option value="">-- SELECCIONAR --</option>
-                                        <option value="remito">Remito</option>
-                                        <option value="soporte">Soporte</option>
-                                    </select>
+                            {tipoCarga === 'remito' && (
+                                <div className="space-y-6 animate-in fade-in duration-500">
+                                    <div><label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block mb-2">Datos del Cliente</label><textarea rows={6} className="w-full p-4 bg-slate-900/80 border border-slate-700 rounded-xl text-xs font-mono text-green-400 placeholder-slate-700 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none" placeholder="Paste data block here..." value={datosRemitoRaw} onChange={e => setDatosRemitoRaw(e.target.value)} /></div>
+                                    <div><label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block mb-2">Productos / Cantidades</label><textarea rows={4} className="w-full p-4 bg-slate-900/80 border border-slate-700 rounded-xl text-xs font-mono text-cyan-200 placeholder-slate-700 focus:border-cyan-500 outline-none" placeholder="QTY CODE..." value={productosRaw} onChange={e => setProductosRaw(e.target.value)} /></div>
+                                    <div><label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block mb-2">Aclaraciones</label><textarea rows={3} className="w-full p-4 bg-slate-900/80 border border-slate-700 rounded-xl text-xs font-mono text-yellow-200 placeholder-slate-700 focus:border-yellow-500 outline-none" placeholder="// Comments..." value={aclaracionesRaw} onChange={e => setAclaracionesRaw(e.target.value)} /></div>
+                                    <div className="grid grid-cols-1 gap-3">
+                                        <label className="flex items-center gap-3 p-4 bg-slate-900/50 rounded-xl border cursor-pointer border-slate-700 hover:border-cyan-500 transition-all group"><input type="checkbox" checked={esTransporte} onChange={e => setEsTransporte(e.target.checked)} className="w-5 h-5 rounded bg-black border-slate-600 text-cyan-600 focus:ring-0" /><span className="text-[11px] font-black text-slate-400 uppercase italic group-hover:text-cyan-400 transition-colors">Es Transporte</span></label>
+                                        <label className="flex items-center gap-3 p-4 bg-slate-900/50 rounded-xl border cursor-pointer border-slate-700 hover:border-green-500 transition-all group"><input type="checkbox" checked={necesitaProduccion} onChange={e => setNecesitaProduccion(e.target.checked)} className="w-5 h-5 rounded bg-black border-slate-600 text-green-600 focus:ring-0" /><span className="text-[11px] font-black text-slate-400 uppercase italic text-green-600/70 group-hover:text-green-400 transition-colors">Requiere Producción</span></label>
+                                    </div>
                                 </div>
-                                {tipoCarga === 'remito' && (
-                                    <div className="space-y-6 animate-in fade-in duration-500">
-                                        <div><label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block mb-2">Datos del Cliente</label><textarea rows={6} className="w-full p-4 bg-slate-900/80 border border-slate-700 rounded-xl text-xs font-mono text-green-400 placeholder-slate-700 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none" placeholder="Paste data block here..." value={datosRemitoRaw} onChange={e => setDatosRemitoRaw(e.target.value)} /></div>
-                                        <div><label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block mb-2">Productos / Cantidades</label><textarea rows={4} className="w-full p-4 bg-slate-900/80 border border-slate-700 rounded-xl text-xs font-mono text-cyan-200 placeholder-slate-700 focus:border-cyan-500 outline-none" placeholder="QTY CODE..." value={productosRaw} onChange={e => setProductosRaw(e.target.value)} /></div>
-                                        <div><label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block mb-2">Aclaraciones</label><textarea rows={3} className="w-full p-4 bg-slate-900/80 border border-slate-700 rounded-xl text-xs font-mono text-yellow-200 placeholder-slate-700 focus:border-yellow-500 outline-none" placeholder="// Comments..." value={aclaracionesRaw} onChange={e => setAclaracionesRaw(e.target.value)} /></div>
-                                        <div className="grid grid-cols-1 gap-3">
-                                            <label className="flex items-center gap-3 p-4 bg-slate-900/50 rounded-xl border cursor-pointer border-slate-700 hover:border-cyan-500 transition-all group"><input type="checkbox" checked={esTransporte} onChange={e => setEsTransporte(e.target.checked)} className="w-5 h-5 rounded bg-black border-slate-600 text-cyan-600 focus:ring-0" /><span className="text-[11px] font-black text-slate-400 uppercase italic group-hover:text-cyan-400 transition-colors">Es Transporte</span></label>
-                                            <label className="flex items-center gap-3 p-4 bg-slate-900/50 rounded-xl border cursor-pointer border-slate-700 hover:border-green-500 transition-all group"><input type="checkbox" checked={necesitaProduccion} onChange={e => setNecesitaProduccion(e.target.checked)} className="w-5 h-5 rounded bg-black border-slate-600 text-green-600 focus:ring-0" /><span className="text-[11px] font-black text-slate-400 uppercase italic text-green-600/70 group-hover:text-green-400 transition-colors">Requiere Producción</span></label>
-                                        </div>
-                                    </div>
-                                )}
-                                {tipoCarga === 'soporte' && (
-                                    <div className="space-y-4 animate-in fade-in duration-500">
-                                        <input type="text" placeholder="ID REF" className="w-full p-4 bg-slate-900/80 rounded-xl font-bold font-mono uppercase text-sm border border-slate-700 text-white focus:border-violet-500 outline-none" value={soporteData.numero} onChange={e => setSoporteData({...soporteData, numero: e.target.value})} />
-                                        <input type="text" placeholder="NOMBRE CLIENTE" className="w-full p-4 bg-slate-900/80 rounded-xl font-bold font-mono uppercase text-sm border border-slate-700 text-white focus:border-violet-500 outline-none" value={soporteData.cliente} onChange={e => setSoporteData({...soporteData, cliente: e.target.value})} />
-                                        <input type="text" placeholder="CONTACTO (OPCIONAL)" className="w-full p-4 bg-slate-900/80 rounded-xl font-bold font-mono uppercase text-sm border border-slate-700 text-white focus:border-violet-500 outline-none" value={soporteData.telefono} onChange={e => setSoporteData({...soporteData, telefono: e.target.value})} />
-                                        <input type="date" className="w-full p-4 bg-slate-900/80 rounded-xl font-bold text-sm border border-slate-700 uppercase text-slate-400 focus:text-white outline-none" value={soporteData.fecha} onChange={e => setSoporteData({...soporteData, fecha: e.target.value})} />
-                                        <textarea rows={5} placeholder="COMPONENTES..." className="w-full p-4 bg-slate-900/80 rounded-xl border border-slate-700 font-bold font-mono uppercase text-sm text-violet-300 outline-none focus:border-violet-500" value={soporteData.productos} onChange={e => setSoporteData({...soporteData, productos: e.target.value})} />
-                                    </div>
-                                )}
-                                {tipoCarga && (
-                                    <button disabled={loading} onClick={guardarDatos} className="w-full mt-6 p-5 bg-cyan-600 text-black rounded-xl font-black font-mono uppercase tracking-widest shadow-[0_0_20px_rgba(8,145,178,0.4)] hover:bg-cyan-400 hover:scale-[1.02] transition-all disabled:bg-slate-800 disabled:text-slate-600 disabled:shadow-none">
-                                        {loading ? 'UPLOADING...' : 'EJECUTAR CARGA'}
-                                    </button>
-                                )}
-                            </div>
+                            )}
+                            {tipoCarga === 'soporte' && (
+                                <div className="space-y-4 animate-in fade-in duration-500">
+                                    <input type="text" placeholder="ID REF" className="w-full p-4 bg-slate-900/80 rounded-xl font-bold font-mono uppercase text-sm border border-slate-700 text-white focus:border-violet-500 outline-none" value={soporteData.numero} onChange={e => setSoporteData({...soporteData, numero: e.target.value})} />
+                                    <input type="text" placeholder="NOMBRE CLIENTE" className="w-full p-4 bg-slate-900/80 rounded-xl font-bold font-mono uppercase text-sm border border-slate-700 text-white focus:border-violet-500 outline-none" value={soporteData.cliente} onChange={e => setSoporteData({...soporteData, cliente: e.target.value})} />
+                                    <input type="text" placeholder="CONTACTO (OPCIONAL)" className="w-full p-4 bg-slate-900/80 rounded-xl font-bold font-mono uppercase text-sm border border-slate-700 text-white focus:border-violet-500 outline-none" value={soporteData.telefono} onChange={e => setSoporteData({...soporteData, telefono: e.target.value})} />
+                                    <input type="date" className="w-full p-4 bg-slate-900/80 rounded-xl font-bold text-sm border border-slate-700 uppercase text-slate-400 focus:text-white outline-none" value={soporteData.fecha} onChange={e => setSoporteData({...soporteData, fecha: e.target.value})} />
+                                    <textarea rows={5} placeholder="COMPONENTES..." className="w-full p-4 bg-slate-900/80 rounded-xl border border-slate-700 font-bold font-mono uppercase text-sm text-violet-300 outline-none focus:border-violet-500" value={soporteData.productos} onChange={e => setSoporteData({...soporteData, productos: e.target.value})} />
+                                </div>
+                            )}
+                            {tipoCarga && (
+                                <button disabled={loading} onClick={async () => {
+                                    if (!tipoCarga) return;
+                                    setLoading(true);
+                                    try {
+                                        if (tipoCarga === 'remito') {
+                                            const numeroRemito = (datosRemitoRaw.match(/\b\d{4}-\d{8}\b/) || [""])[0];
+                                            const fechaEmision = (datosRemitoRaw.match(/\b\d{2}\/\d{2}\/\d{2,4}\b/) || [""])[0];
+                                            let cliente = "";
+                                            let telefono = ""; 
+
+                                            const lineasDatos = datosRemitoRaw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+                                            
+                                            // LÓGICA DE EXTRACCIÓN DE TELÉFONO MEJORADA
+                                            // Buscamos cualquier secuencia numérica que empiece con 11 o 15 y tenga entre 8 y 10 dígitos.
+                                            // \b asegura que sea el inicio de la palabra/número.
+                                            const matchCelular = datosRemitoRaw.match(/\b(11|15)\d{6,8}\b/);
+                                            if (matchCelular) telefono = matchCelular[0]; 
+
+                                            for (let i = 0; i < lineasDatos.length; i++) {
+                                                const linea = lineasDatos[i];
+                                                if (/Raz[oó]n Social:/i.test(linea)) {
+                                                    cliente = linea.replace(/Raz[oó]n Social:/i, "").trim();
+                                                    if (!cliente && lineasDatos[i+1]) cliente = lineasDatos[i+1].trim();
+                                                }
+                                                else if (!cliente && linea.length > 3 && !/^CUIT|Fecha|Tel|Domicilio|Vendedor|Condici|DNI/i.test(linea)) {
+                                                    cliente = linea;
+                                                }
+                                                
+                                                // Fallback: Si la regex general no encontró nada, buscamos en líneas específicas
+                                                if (!telefono && /(Tel[eé]fono|Celular|M[óo]vil|Tel)[:\.]?/i.test(linea)) {
+                                                    let posibleNumero = linea.replace(/(Tel[eé]fono|Celular|M[óo]vil|Tel)[:\.]?/i, "").trim();
+                                                    // Limpiar caracteres no numéricos
+                                                    const soloNumeros = posibleNumero.replace(/\D/g, '');
+                                                    // Validar si empieza con 11 o 15
+                                                    if (/^(11|15)/.test(soloNumeros) && soloNumeros.length >= 8) {
+                                                        telefono = soloNumeros;
+                                                    } else if (!posibleNumero && lineasDatos[i+1]) {
+                                                        // Mirar la siguiente línea si esta estaba vacía
+                                                        const nextLineNum = lineasDatos[i+1].replace(/\D/g, '');
+                                                        if (/^(11|15)/.test(nextLineNum) && nextLineNum.length >= 8) {
+                                                            telefono = nextLineNum;
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            const articulos: any[] = [];
+                                            productosRaw.split(/\r?\n/).filter(Boolean).forEach(l => {
+                                                const partes = l.trim().split(/\s+/);
+                                                if (partes.length >= 2) {
+                                                    const cantidad = parseFloat(partes.shift()!.replace(",", "."));
+                                                    const codigo = partes.join(" ");
+                                                    if (codigo && !isNaN(cantidad)) articulos.push({ codigo, cantidad, detalle: "" });
+                                                }
+                                            });
+                                            
+                                            if (aclaracionesRaw) {
+                                                const lineasAclara = aclaracionesRaw.split(/\r?\n|\/\//).map(l => l.trim()).filter(Boolean);
+                                                lineasAclara.forEach(linea => {
+                                                    articulos.forEach(item => {
+                                                        const codNorm = item.codigo.replace(/\s+/g, "");
+                                                        if (linea.replace(/\s+/g, "").includes(codNorm)) {
+                                                            let detalleExtra = linea.replace(item.codigo, "").trim();
+                                                            if (detalleExtra) item.detalle = item.detalle ? item.detalle + " | " + detalleExtra : detalleExtra;
+                                                        }
+                                                    });
+                                                });
+                                            }
+
+                                            await push(ref(db_realtime, 'remitos'), {
+                                                numeroRemito, fechaEmision, cliente, 
+                                                telefono, 
+                                                articulos, aclaraciones: aclaracionesRaw,
+                                                produccion: necesitaProduccion, esTransporte, estado: null, estadoPreparacion: "Pendiente",
+                                                rangoDespacho: "", notificado: false, timestamp: new Date().toISOString()
+                                            });
+                                        } else {
+                                            await push(ref(db_realtime, 'soportes'), {
+                                                numeroSoporte: soporteData.numero, 
+                                                cliente: soporteData.cliente,
+                                                telefono: soporteData.telefono,
+                                                fechaSoporte: soporteData.fecha, 
+                                                productos: soporteData.productos.split('\n').filter(Boolean),
+                                                estado: "Pendiente", 
+                                                rangoEntrega: "", 
+                                                notificado: false, 
+                                                timestamp: new Date().toISOString()
+                                            });
+                                        }
+                                        alert("✅ Guardado correctamente");
+                                        setSidebarOpen(false);
+                                        setDatosRemitoRaw(''); setProductosRaw(''); setAclaracionesRaw(''); setEsTransporte(false); setNecesitaProduccion(false);
+                                    } catch (e) { alert("❌ Error al guardar"); }
+                                    setLoading(false);
+                                }} className="w-full mt-6 p-5 bg-cyan-600 text-black rounded-xl font-black font-mono uppercase tracking-widest shadow-[0_0_20px_rgba(8,145,178,0.4)] hover:bg-cyan-400 hover:scale-[1.02] transition-all disabled:bg-slate-800 disabled:text-slate-600 disabled:shadow-none">
+                                    {loading ? 'UPLOADING...' : 'EJECUTAR CARGA'}
+                                </button>
+                            )}
                         </div>
                     </div>
-                )}
+                </div>
+            )}
 
                 {/* ---------------------------------------------------------- */}
             {/* BLOQUE MODAL FIRMA (PEGAR AL FINAL DEL RETURN)             */}
