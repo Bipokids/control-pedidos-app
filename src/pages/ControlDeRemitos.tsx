@@ -760,7 +760,7 @@ const ControlDeRemitos: React.FC = () => {
                     </div>
                 </button>
 
-                {/* MODAL DETALLE (CON EDICIÓN COMPLETA: TELÉFONO, ITEMS, ACLARACIONES Y ELIMINAR) */}
+                {/* MODAL DETALLE (SOLO LECTURA + ELIMINAR REMITO) */}
 {modalDetalle.open && modalDetalle.data && (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md" onClick={() => setModalDetalle({ open: false, data: null })}>
         <div className="bg-[#0f172a] rounded-[2rem] p-6 w-full max-w-lg shadow-[0_0_50px_rgba(6,182,212,0.2)] border border-cyan-500/30 animate-in fade-in zoom-in duration-300 relative overflow-hidden flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
@@ -788,29 +788,30 @@ const ControlDeRemitos: React.FC = () => {
                         )}
                     </div>
                     
+                    {/* SECCIÓN DE CONTACTO (SOLO LECTURA) */}
                     {/* SECCIÓN DE CONTACTO EDITABLE */}
-                    <div className="flex items-center gap-2 mt-2 group/edit">
-                        <p className="text-xs font-mono text-slate-400">
-                            Contacto: <span className="text-white font-bold tracking-wide">{(modalDetalle.data).telefono || "Sin registrar"}</span>
-                        </p>
-                        <button 
-                            onClick={() => {
-                                const nuevoTel = prompt("Ingresa el nuevo número de contacto (solo números):", (modalDetalle.data).telefono || "");
-                                if (nuevoTel !== null) {
-                                    const telLimpio = nuevoTel.replace(/\D/g, '');
-                                    const path = modalDetalle.data.numeroRemito ? 'remitos' : 'soportes';
-                                    const id = (modalDetalle.data).id;
-                                    
-                                    update(ref(db_realtime, `${path}/${id}`), { telefono: telLimpio });
-                                    setModalDetalle(prev => ({...prev, data: { ...prev.data, telefono: telLimpio }}));
-                                }
-                            }}
-                            className="text-slate-600 hover:text-cyan-400 transition-colors p-1 rounded-md hover:bg-slate-800"
-                            title="Editar teléfono"
-                        >
-                            ✏️
-                        </button>
-                    </div>
+<div className="flex items-center gap-2 mt-2 group/edit">
+    <p className="text-xs font-mono text-slate-400">
+        Contacto: <span className="text-white font-bold tracking-wide">{(modalDetalle.data).telefono || "Sin registrar"}</span>
+    </p>
+    <button 
+        onClick={() => {
+            const nuevoTel = prompt("Ingresa el nuevo número de contacto (solo números):", (modalDetalle.data).telefono || "");
+            if (nuevoTel !== null) {
+                const telLimpio = nuevoTel.replace(/\D/g, '');
+                const path = modalDetalle.data.numeroRemito ? 'remitos' : 'soportes';
+                const id = (modalDetalle.data).id;
+                
+                update(ref(db_realtime, `${path}/${id}`), { telefono: telLimpio });
+                setModalDetalle(prev => ({...prev, data: { ...prev.data, telefono: telLimpio }}));
+            }
+        }}
+        className="text-slate-600 hover:text-cyan-400 transition-colors p-1 rounded-md hover:bg-slate-800"
+        title="Editar teléfono"
+    >
+        ✏️
+    </button>
+</div>
                 </div>
                 <button onClick={() => setModalDetalle({ open: false, data: null })} className="text-slate-500 hover:text-white text-xl font-bold p-2 transition-colors">✕</button>
             </div>
@@ -820,97 +821,36 @@ const ControlDeRemitos: React.FC = () => {
                 <div className="bg-slate-900/50 p-5 rounded-2xl border border-slate-800">
                     <h4 className="text-[10px] font-black text-cyan-600 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">📦 Detalle de envío</h4>
                     <ul className="space-y-3">
-    {modalDetalle.data.numeroRemito && Array.isArray(modalDetalle.data.articulos) && modalDetalle.data.articulos.map((art: any, i: number) => (
-        <li key={i} className="text-sm font-bold text-slate-300 border-b border-slate-800 pb-2 last:border-0 last:pb-0 flex items-start gap-3 font-mono group/item min-h-[2rem]">
-            {/* Cantidad */}
-            <span className="bg-cyan-900/40 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded text-xs min-w-[30px] text-center mt-0.5">
-                {art.cantidad}
-            </span>
-            
-            {/* Descripción */}
-            <div className="flex-1 pt-0.5">
-                <p className="uppercase leading-tight">{art.codigo}</p>
-                {art.detalle && <p className="text-[10px] text-slate-500 italic font-normal mt-0.5">{art.detalle}</p>}
-            </div>
-
-            {/* ACCIONES DE ITEM (Editar / Eliminar) */}
-            <div className="flex gap-1 opacity-0 group-hover/item:opacity-100 transition-all self-start">
-                {/* Botón Editar */}
-                <button 
-                    onClick={() => {
-                        const nuevaCant = prompt("Editar Cantidad:", art.cantidad);
-                        if (nuevaCant === null) return;
-                        const nuevoCodigo = prompt("Editar Detalle/Código:", art.codigo);
-                        if (nuevoCodigo === null) return;
-
-                        const nuevosArticulos = [...modalDetalle.data.articulos];
-                        nuevosArticulos[i] = { ...art, cantidad: nuevaCant, codigo: nuevoCodigo };
+                        {/* LISTA DE ARTICULOS (SIN BOTONES DE EDICIÓN) */}
+                        {modalDetalle.data.numeroRemito && Array.isArray(modalDetalle.data.articulos) && modalDetalle.data.articulos.map((art: any, i: number) => (
+                            <li key={i} className="text-sm font-bold text-slate-300 border-b border-slate-800 pb-2 last:border-0 last:pb-0 flex items-start gap-3 font-mono min-h-[2rem]">
+                                {/* Cantidad */}
+                                <span className="bg-cyan-900/40 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded text-xs min-w-[30px] text-center mt-0.5">
+                                    {art.cantidad}
+                                </span>
+                                
+                                {/* Descripción */}
+                                <div className="flex-1 pt-0.5">
+                                    <p className="uppercase leading-tight">{art.codigo}</p>
+                                    {art.detalle && <p className="text-[10px] text-slate-500 italic font-normal mt-0.5">{art.detalle}</p>}
+                                </div>
+                            </li>
+                        ))}
                         
-                        const path = 'remitos';
-                        const id = (modalDetalle.data).id;
-
-                        update(ref(db_realtime, `${path}/${id}`), { articulos: nuevosArticulos });
-                        setModalDetalle(prev => ({...prev, data: { ...prev.data, articulos: nuevosArticulos }}));
-                    }}
-                    className="text-slate-500 hover:text-cyan-400 p-1.5 hover:bg-cyan-900/20 rounded transition-colors"
-                    title="Editar Item"
-                >
-                    ✏️
-                </button>
-
-                {/* Botón Eliminar Item */}
-                <button 
-                    onClick={() => {
-                        if (window.confirm(`¿Estás seguro de quitar "${art.codigo}" de la lista?`)) {
-                            // Filtramos excluyendo el índice actual
-                            const nuevosArticulos = modalDetalle.data.articulos.filter((_: any, index: number) => index !== i);
-                            
-                            const path = 'remitos';
-                            const id = (modalDetalle.data).id;
-
-                            update(ref(db_realtime, `${path}/${id}`), { articulos: nuevosArticulos });
-                            setModalDetalle(prev => ({...prev, data: { ...prev.data, articulos: nuevosArticulos }}));
-                        }
-                    }}
-                    className="text-slate-500 hover:text-red-400 p-1.5 hover:bg-red-900/20 rounded transition-colors"
-                    title="Eliminar Item"
-                >
-                    🗑️
-                </button>
-            </div>
-        </li>
-    ))}
-    
-    {/* Items de Soporte (se mantienen igual) */}
-    {modalDetalle.data.numeroSoporte && Array.isArray(modalDetalle.data.productos) && modalDetalle.data.productos.map((prod: string, i: number) => (
-        <li key={i} className="text-sm font-bold text-slate-300 border-b border-slate-800 pb-2 last:border-0 last:pb-0 flex items-center gap-3 font-mono">
-            <span className="text-violet-500">›</span>
-            <p className="uppercase">{prod}</p>
-        </li>
-    ))}
-</ul>
+                        {/* Items de Soporte */}
+                        {modalDetalle.data.numeroSoporte && Array.isArray(modalDetalle.data.productos) && modalDetalle.data.productos.map((prod: string, i: number) => (
+                            <li key={i} className="text-sm font-bold text-slate-300 border-b border-slate-800 pb-2 last:border-0 last:pb-0 flex items-center gap-3 font-mono">
+                                <span className="text-violet-500">›</span>
+                                <p className="uppercase">{prod}</p>
+                            </li>
+                        ))}
+                    </ul>
                 </div>
                 
-                {/* ACLARACIONES EDITABLES */}
-                <div className="bg-yellow-900/10 p-5 rounded-2xl border border-yellow-500/20 text-yellow-100 relative group/aclaracion">
+                {/* ACLARACIONES (SOLO LECTURA) */}
+                <div className="bg-yellow-900/10 p-5 rounded-2xl border border-yellow-500/20 text-yellow-100 relative">
                     <div className="flex justify-between items-center mb-2">
                         <h4 className="text-[10px] font-black text-yellow-500 uppercase tracking-[0.2em] flex items-center gap-2">📝 Aclaraciones</h4>
-                        <button 
-                            onClick={() => {
-                                const nuevaAclaracion = prompt("Editar aclaraciones:", modalDetalle.data.aclaraciones || "");
-                                if (nuevaAclaracion !== null) {
-                                    const path = modalDetalle.data.numeroRemito ? 'remitos' : 'soportes';
-                                    const id = (modalDetalle.data).id;
-                                    
-                                    update(ref(db_realtime, `${path}/${id}`), { aclaraciones: nuevaAclaracion });
-                                    setModalDetalle(prev => ({...prev, data: { ...prev.data, aclaraciones: nuevaAclaracion }}));
-                                }
-                            }}
-                            className="text-yellow-600 hover:text-yellow-300 transition-colors text-xs p-1 opacity-50 group-hover/aclaracion:opacity-100"
-                            title="Editar aclaraciones"
-                        >
-                            ✏️ Editar
-                        </button>
                     </div>
                     <p className="text-xs font-mono leading-relaxed whitespace-pre-line text-yellow-200/80 min-h-[1.5em]">
                         {modalDetalle.data.aclaraciones || "Sin aclaraciones"}
@@ -952,7 +892,7 @@ const ControlDeRemitos: React.FC = () => {
                         Cerrar
                     </button>
                     
-                    {/* BOTÓN ELIMINAR */}
+                    {/* BOTÓN ELIMINAR (MANTENIDO) */}
                     <button 
                         onClick={() => {
                             if (window.confirm("⚠️ ¿Estás seguro de que quieres ELIMINAR este registro? Esta acción es irreversible.")) {
@@ -963,7 +903,6 @@ const ControlDeRemitos: React.FC = () => {
                                 remove(ref(db_realtime, `${path}/${id}`))
                                     .then(() => {
                                         setModalDetalle({ open: false, data: null });
-                                        // Opcional: Mostrar un toast de éxito aquí
                                     })
                                     .catch(err => alert("Error al eliminar: " + err.message));
                             }
@@ -977,7 +916,6 @@ const ControlDeRemitos: React.FC = () => {
         </div>
     </div>
 )}
-
                 {/* MODAL WHATSAPP */}
                 {modalWhatsapp && (
                     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
