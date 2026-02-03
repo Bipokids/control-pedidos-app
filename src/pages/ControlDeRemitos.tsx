@@ -952,7 +952,7 @@ const ControlDeRemitos: React.FC = () => {
                     </div>
                 )}
 
-            {/* SIDEBAR DE CARGA - VERSIÓN FINAL (SIN DESCRIPCIÓN GENÉRICA) */}
+            {/* SIDEBAR DE CARGA - MULTI-UPLOAD (BATCH PROCESSING) */}
 {sidebarOpen && (
     <div className="fixed inset-0 z-[100] flex justify-end">
         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
@@ -972,7 +972,7 @@ const ControlDeRemitos: React.FC = () => {
                     </select>
                 </div>
 
-                {/* --- BLOQUE REMITO --- */}
+                {/* --- BLOQUE REMITO (MULTI-ARCHIVO) --- */}
                 {tipoCarga === 'remito' && (
                     <div className="space-y-6 animate-in fade-in duration-500">
                         
@@ -980,115 +980,134 @@ const ControlDeRemitos: React.FC = () => {
                             <input 
                                 type="file" 
                                 accept=".xlsx, .xls, .csv" 
+                                multiple // <--- ¡LA CLAVE PARA CARGAR VARIOS!
                                 className="absolute inset-0 opacity-0 cursor-pointer z-50" 
                                 onClick={(e) => (e.currentTarget.value = '')}
                                 onChange={async (e) => {
-                                    const file = e.target.files?.[0];
-                                    if (!file) return;
+                                    const files = e.target.files;
+                                    if (!files || files.length === 0) return;
                                     setLoading(true);
                                     
-                                    const reader = new FileReader();
-                                    reader.onload = async (evt) => {
-                                        try {
-                                            const { read, utils } = await import('xlsx');
-                                            const bstr = evt.target?.result;
-                                            const wb = read(bstr, { type: 'binary' });
-                                            const ws = wb.Sheets[wb.SheetNames[0]];
-                                            const data: any[][] = utils.sheet_to_json(ws, { header: 1 });
+                                    // Función para procesar UN solo archivo (promisificada)
+                                    const processFile = (file: File) => new Promise<{ status: 'ok' | 'error', id?: string, msg?: string }>((resolve) => {
+                                        const reader = new FileReader();
+                                        
+                                        reader.onload = async (evt) => {
+                                            try {
+                                                const { read, utils } = await import('xlsx');
+                                                const bstr = evt.target?.result;
+                                                const wb = read(bstr, { type: 'binary' });
+                                                const ws = wb.Sheets[wb.SheetNames[0]];
+                                                const data: any[][] = utils.sheet_to_json(ws, { header: 1 });
 
-                                            // 1. CABECERA
-                                            const nroRemito = data[5]?.[26] || "Sin número"; 
-                                            const fechaRaw = data[7]?.[28]; 
-                                            const fechaEmision = typeof fechaRaw === 'number' 
-                                                ? new Date((fechaRaw - 25569) * 86400 * 1000).toLocaleDateString() 
-                                                : String(fechaRaw || new Date().toLocaleDateString());
-                                            const cliente = data[15]?.[8] || "Sin nombre";
-                                            const telRaw = String(data[21]?.[8] || "");      
-                                            const telefono = telRaw.replace(/\D/g, ''); 
+                                                // --- LÓGICA DE EXTRACCIÓN (LA MISMA QUE YA FUNCIONA) ---
+                                                const nroRemito = data[5]?.[26] || "Sin número"; 
+                                                const fechaRaw = data[7]?.[28]; 
+                                                const fechaEmision = typeof fechaRaw === 'number' 
+                                                    ? new Date((fechaRaw - 25569) * 86400 * 1000).toLocaleDateString() 
+                                                    : String(fechaRaw || new Date().toLocaleDateString());
+                                                const cliente = data[15]?.[8] || "Sin nombre";
+                                                const telRaw = String(data[21]?.[8] || "");      
+                                                const telefono = telRaw.replace(/\D/g, ''); 
 
-                                            // 2. EXTRACCIÓN CON FRENO
-                                            const articulos: any[] = [];
-                                            let textoAclaraciones = "";
+                                                const articulos: any[] = [];
+                                                let textoAclaraciones = "";
 
-                                            for (let i = 31; i < data.length; i++) {
-                                                const row = data[i];
-                                                if (!row) continue;
+                                                for (let i = 31; i < data.length; i++) {
+                                                    const row = data[i];
+                                                    if (!row) continue;
 
-                                                // Freno por duplicado o inicio de notas
-                                                const rowStr = row.join(' ').toUpperCase();
-                                                const celdaNotas = row[3];
-                                                
-                                                // Si encontramos "DUPLICADO" o empezamos a ver las notas en la Columna D -> STOP
-                                                if (rowStr.includes("DUPLICADO") || (typeof celdaNotas === 'string' && (celdaNotas.includes("SURTIDO") || celdaNotas.includes("TOTAL") || celdaNotas.includes("BULTOS")))) {
-                                                    if (typeof celdaNotas === 'string') textoAclaraciones = celdaNotas; // Capturamos la nota si fue el trigger
-                                                    break; 
-                                                }
-
-                                                const cant = row[1]; // Col B
-                                                const cod = row[7];  // Col H
-                                                
-                                                if (typeof cant === 'number' && cod) {
-                                                    articulos.push({
-                                                        cantidad: cant,
-                                                        codigo: String(cod).trim(),
-                                                        detalle: "" // <--- CAMBIO: Inicializamos vacío, ignoramos descripción del Excel
-                                                    });
-                                                }
-                                            }
-
-                                            // 3. ASIGNAR ACLARACIONES (AHORA ES EL ÚNICO CONTENIDO DE DETALLE)
-                                            if (textoAclaraciones) {
-                                                const lineas = textoAclaraciones.split(/\r?\n/);
-                                                lineas.forEach(linea => {
-                                                    const lineaLimpia = linea.toUpperCase().replace(/\s+/g, ""); 
+                                                    const rowStr = row.join(' ').toUpperCase();
+                                                    const celdaNotas = row[3];
                                                     
-                                                    articulos.forEach(item => {
-                                                        const codigoLimpio = item.codigo.toUpperCase().replace(/\s+/g, "");
-                                                        
-                                                        if (lineaLimpia.includes(codigoLimpio)) {
-                                                            let detalleExtra = linea.replace(item.codigo, "").replace(item.codigo.split(' ')[0], "").trim(); 
-                                                            
-                                                            if (detalleExtra && !detalleExtra.includes("TOTAL") && !detalleExtra.includes("BULTOS")) {
-                                                                // Como 'detalle' empieza vacío, aquí solo quedará la aclaración
-                                                                item.detalle = item.detalle ? `${item.detalle} | ${detalleExtra}` : detalleExtra;
+                                                    // Freno en Duplicados o Notas
+                                                    if (rowStr.includes("DUPLICADO") || (typeof celdaNotas === 'string' && (celdaNotas.includes("SURTIDO") || celdaNotas.includes("TOTAL") || celdaNotas.includes("BULTOS")))) {
+                                                        if (typeof celdaNotas === 'string') textoAclaraciones = celdaNotas;
+                                                        break; 
+                                                    }
+
+                                                    const cant = row[1]; 
+                                                    const cod = row[7];
+                                                    
+                                                    if (typeof cant === 'number' && cod) {
+                                                        articulos.push({
+                                                            cantidad: cant,
+                                                            codigo: String(cod).trim(),
+                                                            detalle: "" 
+                                                        });
+                                                    }
+                                                }
+
+                                                // Procesar Notas
+                                                if (textoAclaraciones) {
+                                                    const lineas = textoAclaraciones.split(/\r?\n/);
+                                                    lineas.forEach(linea => {
+                                                        const lineaLimpia = linea.toUpperCase().replace(/\s+/g, ""); 
+                                                        articulos.forEach(item => {
+                                                            const codigoLimpio = item.codigo.toUpperCase().replace(/\s+/g, "");
+                                                            if (lineaLimpia.includes(codigoLimpio)) {
+                                                                let detalleExtra = linea.replace(item.codigo, "").replace(item.codigo.split(' ')[0], "").trim(); 
+                                                                if (detalleExtra && !detalleExtra.includes("TOTAL") && !detalleExtra.includes("BULTOS")) {
+                                                                    item.detalle = item.detalle ? `${item.detalle} | ${detalleExtra}` : detalleExtra;
+                                                                }
                                                             }
-                                                        }
+                                                        });
                                                     });
+                                                }
+
+                                                // Guardado
+                                                await push(ref(db_realtime, 'remitos'), {
+                                                    numeroRemito: nroRemito,
+                                                    fechaEmision,
+                                                    cliente,
+                                                    telefono,
+                                                    articulos,
+                                                    aclaraciones: textoAclaraciones,
+                                                    produccion: necesitaProduccion,
+                                                    esTransporte,
+                                                    estadoPreparacion: "Pendiente",
+                                                    timestamp: new Date().toISOString(),
+                                                    notificado: false,
+                                                    rangoDespacho: ""
                                                 });
+
+                                                resolve({ status: 'ok', id: nroRemito });
+                                                
+                                            } catch (err) {
+                                                console.error(err);
+                                                resolve({ status: 'error', msg: file.name });
                                             }
+                                        };
+                                        reader.readAsBinaryString(file);
+                                    });
 
-                                            // 4. GUARDADO
-                                            await push(ref(db_realtime, 'remitos'), {
-                                                numeroRemito: nroRemito,
-                                                fechaEmision,
-                                                cliente,
-                                                telefono,
-                                                articulos,
-                                                aclaraciones: textoAclaraciones,
-                                                produccion: necesitaProduccion,
-                                                esTransporte,
-                                                estadoPreparacion: "Pendiente",
-                                                timestamp: new Date().toISOString(),
-                                                notificado: false,
-                                                rangoDespacho: ""
-                                            });
+                                    // --- EJECUCIÓN EN PARALELO (BATCH) ---
+                                    // Convertimos FileList a Array y mapeamos cada archivo a una promesa
+                                    const results = await Promise.all(Array.from(files).map(file => processFile(file)));
+                                    
+                                    // --- REPORTE FINAL ---
+                                    const exitosos = results.filter(r => r.status === 'ok');
+                                    const fallidos = results.filter(r => r.status === 'error');
+                                    
+                                    let mensaje = `🏁 PROCESO TERMINADO\n\n✅ Cargados: ${exitosos.length}`;
+                                    if (exitosos.length > 0) mensaje += `\n(Último ID: ${exitosos[exitosos.length-1].id})`;
+                                    
+                                    if (fallidos.length > 0) {
+                                        mensaje += `\n\n❌ Fallidos: ${fallidos.length}\nArchivos: ${fallidos.map(f => f.msg).join(', ')}`;
+                                    }
 
-                                            alert(`✅ EXITO:\nRemito: ${nroRemito}\nItems: ${articulos.length}`);
-                                            setSidebarOpen(false);
-                                            
-                                        } catch (err) {
-                                            console.error(err);
-                                            alert("❌ Error procesando Excel.");
-                                        } finally {
-                                            setLoading(false);
-                                        }
-                                    };
-                                    reader.readAsBinaryString(file);
+                                    alert(mensaje);
+                                    
+                                    if (exitosos.length > 0) {
+                                        setSidebarOpen(false);
+                                    }
+                                    setLoading(false);
                                 }}
                             />
                             <div className="pointer-events-none">
-                                <span className="text-5xl mb-4 block group-hover:scale-110 transition-transform">📄</span>
-                                <p className="text-cyan-400 font-bold uppercase text-xs tracking-widest">Cargar Remito</p>
+                                <span className="text-5xl mb-4 block group-hover:scale-110 transition-transform">📚</span>
+                                <p className="text-cyan-400 font-bold uppercase text-xs tracking-widest">Subir Múltiples Remitos</p>
+                                <p className="text-slate-500 text-[10px] mt-2 font-mono">Arrastra o selecciona uno o varios archivos</p>
                             </div>
                         </div>
 
