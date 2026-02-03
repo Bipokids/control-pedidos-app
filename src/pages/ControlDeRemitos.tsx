@@ -952,147 +952,196 @@ const ControlDeRemitos: React.FC = () => {
                     </div>
                 )}
 
-                {/* SIDEBAR DE CARGA - LOGIC UPDATE */}
-            {sidebarOpen && (
-                <div className="fixed inset-0 z-[100] flex justify-end">
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
-                    <div className="relative w-full max-w-lg bg-[#050b14] h-full shadow-[-20px_0_50px_rgba(0,0,0,0.5)] border-l border-cyan-900/50 p-8 overflow-y-auto animate-in slide-in-from-right duration-300">
-                        <div className="flex justify-between items-center mb-10 border-b border-cyan-900 pb-4">
-                            <h2 className="text-2xl font-black italic uppercase text-white tracking-tighter drop-shadow-[0_0_5px_cyan]">PANEL DE CARGA</h2>
-                            <button onClick={() => setSidebarOpen(false)} className="text-slate-500 hover:text-cyan-400 text-2xl font-bold transition-colors">✕</button>
-                        </div>
-                        <div className="space-y-8">
-                            <div>
-                                <label className="text-[10px] font-mono text-cyan-600 uppercase tracking-widest block mb-2">Protocolo de Carga</label>
-                                <select value={tipoCarga} onChange={(e) => setTipoCarga(e.target.value as any)} className="w-full p-4 bg-slate-900/50 border border-slate-700 rounded-xl font-bold font-mono uppercase text-sm text-cyan-100 outline-none focus:border-cyan-500 focus:shadow-[0_0_15px_rgba(6,182,212,0.2)] transition-all">
-                                    <option value="">-- SELECCIONAR --</option>
-                                    <option value="remito">Remito</option>
-                                    <option value="soporte">Soporte</option>
-                                </select>
-                            </div>
-                            {tipoCarga === 'remito' && (
-                                <div className="space-y-6 animate-in fade-in duration-500">
-                                    <div><label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block mb-2">Datos del Cliente</label><textarea rows={6} className="w-full p-4 bg-slate-900/80 border border-slate-700 rounded-xl text-xs font-mono text-green-400 placeholder-slate-700 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none" placeholder="Paste data block here..." value={datosRemitoRaw} onChange={e => setDatosRemitoRaw(e.target.value)} /></div>
-                                    <div><label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block mb-2">Productos / Cantidades</label><textarea rows={4} className="w-full p-4 bg-slate-900/80 border border-slate-700 rounded-xl text-xs font-mono text-cyan-200 placeholder-slate-700 focus:border-cyan-500 outline-none" placeholder="QTY CODE..." value={productosRaw} onChange={e => setProductosRaw(e.target.value)} /></div>
-                                    <div><label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block mb-2">Aclaraciones</label><textarea rows={3} className="w-full p-4 bg-slate-900/80 border border-slate-700 rounded-xl text-xs font-mono text-yellow-200 placeholder-slate-700 focus:border-yellow-500 outline-none" placeholder="// Comments..." value={aclaracionesRaw} onChange={e => setAclaracionesRaw(e.target.value)} /></div>
-                                    <div className="grid grid-cols-1 gap-3">
-                                        <label className="flex items-center gap-3 p-4 bg-slate-900/50 rounded-xl border cursor-pointer border-slate-700 hover:border-cyan-500 transition-all group"><input type="checkbox" checked={esTransporte} onChange={e => setEsTransporte(e.target.checked)} className="w-5 h-5 rounded bg-black border-slate-600 text-cyan-600 focus:ring-0" /><span className="text-[11px] font-black text-slate-400 uppercase italic group-hover:text-cyan-400 transition-colors">Es Transporte</span></label>
-                                        <label className="flex items-center gap-3 p-4 bg-slate-900/50 rounded-xl border cursor-pointer border-slate-700 hover:border-green-500 transition-all group"><input type="checkbox" checked={necesitaProduccion} onChange={e => setNecesitaProduccion(e.target.checked)} className="w-5 h-5 rounded bg-black border-slate-600 text-green-600 focus:ring-0" /><span className="text-[11px] font-black text-slate-400 uppercase italic text-green-600/70 group-hover:text-green-400 transition-colors">Requiere Producción</span></label>
-                                    </div>
-                                </div>
-                            )}
-                            {tipoCarga === 'soporte' && (
-                                <div className="space-y-4 animate-in fade-in duration-500">
-                                    <input type="text" placeholder="ID REF" className="w-full p-4 bg-slate-900/80 rounded-xl font-bold font-mono uppercase text-sm border border-slate-700 text-white focus:border-violet-500 outline-none" value={soporteData.numero} onChange={e => setSoporteData({...soporteData, numero: e.target.value})} />
-                                    <input type="text" placeholder="NOMBRE CLIENTE" className="w-full p-4 bg-slate-900/80 rounded-xl font-bold font-mono uppercase text-sm border border-slate-700 text-white focus:border-violet-500 outline-none" value={soporteData.cliente} onChange={e => setSoporteData({...soporteData, cliente: e.target.value})} />
-                                    <input type="text" placeholder="CONTACTO (OPCIONAL)" className="w-full p-4 bg-slate-900/80 rounded-xl font-bold font-mono uppercase text-sm border border-slate-700 text-white focus:border-violet-500 outline-none" value={soporteData.telefono} onChange={e => setSoporteData({...soporteData, telefono: e.target.value})} />
-                                    <input type="date" className="w-full p-4 bg-slate-900/80 rounded-xl font-bold text-sm border border-slate-700 uppercase text-slate-400 focus:text-white outline-none" value={soporteData.fecha} onChange={e => setSoporteData({...soporteData, fecha: e.target.value})} />
-                                    <textarea rows={5} placeholder="COMPONENTES..." className="w-full p-4 bg-slate-900/80 rounded-xl border border-slate-700 font-bold font-mono uppercase text-sm text-violet-300 outline-none focus:border-violet-500" value={soporteData.productos} onChange={e => setSoporteData({...soporteData, productos: e.target.value})} />
-                                </div>
-                            )}
-                            {tipoCarga && (
-                                <button disabled={loading} onClick={async () => {
-                                    if (!tipoCarga) return;
+            {/* SIDEBAR DE CARGA - VERSIÓN FINAL (SIN DESCRIPCIÓN GENÉRICA) */}
+{sidebarOpen && (
+    <div className="fixed inset-0 z-[100] flex justify-end">
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
+        <div className="relative w-full max-w-lg bg-[#050b14] h-full shadow-[-20px_0_50px_rgba(0,0,0,0.5)] border-l border-cyan-900/50 p-8 overflow-y-auto animate-in slide-in-from-right duration-300">
+            <div className="flex justify-between items-center mb-10 border-b border-cyan-900 pb-4">
+                <h2 className="text-2xl font-black italic uppercase text-white tracking-tighter drop-shadow-[0_0_5px_cyan]">PANEL DE CARGA</h2>
+                <button onClick={() => setSidebarOpen(false)} className="text-slate-500 hover:text-cyan-400 text-2xl font-bold transition-colors">✕</button>
+            </div>
+            
+            <div className="space-y-8">
+                <div>
+                    <label className="text-[10px] font-mono text-cyan-600 uppercase tracking-widest block mb-2">Protocolo de Carga</label>
+                    <select value={tipoCarga} onChange={(e) => setTipoCarga(e.target.value as any)} className="w-full p-4 bg-slate-900/50 border border-slate-700 rounded-xl font-bold font-mono uppercase text-sm text-cyan-100 outline-none focus:border-cyan-500 focus:shadow-[0_0_15px_rgba(6,182,212,0.2)] transition-all">
+                        <option value="">-- SELECCIONAR --</option>
+                        <option value="remito">Remito</option>
+                        <option value="soporte">Soporte</option>
+                    </select>
+                </div>
+
+                {/* --- BLOQUE REMITO --- */}
+                {tipoCarga === 'remito' && (
+                    <div className="space-y-6 animate-in fade-in duration-500">
+                        
+                        <div className="border-2 border-dashed border-cyan-900/50 rounded-2xl p-10 text-center bg-slate-900/30 hover:bg-cyan-900/10 transition-all group relative cursor-pointer">
+                            <input 
+                                type="file" 
+                                accept=".xlsx, .xls, .csv" 
+                                className="absolute inset-0 opacity-0 cursor-pointer z-50" 
+                                onClick={(e) => (e.currentTarget.value = '')}
+                                onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
                                     setLoading(true);
-                                    try {
-                                        if (tipoCarga === 'remito') {
-                                            const numeroRemito = (datosRemitoRaw.match(/\b\d{4}-\d{8}\b/) || [""])[0];
-                                            const fechaEmision = (datosRemitoRaw.match(/\b\d{2}\/\d{2}\/\d{2,4}\b/) || [""])[0];
-                                            let cliente = "";
-                                            let telefono = ""; 
+                                    
+                                    const reader = new FileReader();
+                                    reader.onload = async (evt) => {
+                                        try {
+                                            const { read, utils } = await import('xlsx');
+                                            const bstr = evt.target?.result;
+                                            const wb = read(bstr, { type: 'binary' });
+                                            const ws = wb.Sheets[wb.SheetNames[0]];
+                                            const data: any[][] = utils.sheet_to_json(ws, { header: 1 });
 
-                                            const lineasDatos = datosRemitoRaw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-                                            
-                                            // LÓGICA DE EXTRACCIÓN DE TELÉFONO MEJORADA
-                                            // Buscamos cualquier secuencia numérica que empiece con 11 o 15 y tenga entre 8 y 10 dígitos.
-                                            // \b asegura que sea el inicio de la palabra/número.
-                                            const matchCelular = datosRemitoRaw.match(/\b(11|15)\d{6,8}\b/);
-                                            if (matchCelular) telefono = matchCelular[0]; 
+                                            // 1. CABECERA
+                                            const nroRemito = data[5]?.[26] || "Sin número"; 
+                                            const fechaRaw = data[7]?.[28]; 
+                                            const fechaEmision = typeof fechaRaw === 'number' 
+                                                ? new Date((fechaRaw - 25569) * 86400 * 1000).toLocaleDateString() 
+                                                : String(fechaRaw || new Date().toLocaleDateString());
+                                            const cliente = data[15]?.[8] || "Sin nombre";
+                                            const telRaw = String(data[21]?.[8] || "");      
+                                            const telefono = telRaw.replace(/\D/g, ''); 
 
-                                            for (let i = 0; i < lineasDatos.length; i++) {
-                                                const linea = lineasDatos[i];
-                                                if (/Raz[oó]n Social:/i.test(linea)) {
-                                                    cliente = linea.replace(/Raz[oó]n Social:/i, "").trim();
-                                                    if (!cliente && lineasDatos[i+1]) cliente = lineasDatos[i+1].trim();
-                                                }
-                                                else if (!cliente && linea.length > 3 && !/^CUIT|Fecha|Tel|Domicilio|Vendedor|Condici|DNI/i.test(linea)) {
-                                                    cliente = linea;
-                                                }
+                                            // 2. EXTRACCIÓN CON FRENO
+                                            const articulos: any[] = [];
+                                            let textoAclaraciones = "";
+
+                                            for (let i = 31; i < data.length; i++) {
+                                                const row = data[i];
+                                                if (!row) continue;
+
+                                                // Freno por duplicado o inicio de notas
+                                                const rowStr = row.join(' ').toUpperCase();
+                                                const celdaNotas = row[3];
                                                 
-                                                // Fallback: Si la regex general no encontró nada, buscamos en líneas específicas
-                                                if (!telefono && /(Tel[eé]fono|Celular|M[óo]vil|Tel)[:\.]?/i.test(linea)) {
-                                                    let posibleNumero = linea.replace(/(Tel[eé]fono|Celular|M[óo]vil|Tel)[:\.]?/i, "").trim();
-                                                    // Limpiar caracteres no numéricos
-                                                    const soloNumeros = posibleNumero.replace(/\D/g, '');
-                                                    // Validar si empieza con 11 o 15
-                                                    if (/^(11|15)/.test(soloNumeros) && soloNumeros.length >= 8) {
-                                                        telefono = soloNumeros;
-                                                    } else if (!posibleNumero && lineasDatos[i+1]) {
-                                                        // Mirar la siguiente línea si esta estaba vacía
-                                                        const nextLineNum = lineasDatos[i+1].replace(/\D/g, '');
-                                                        if (/^(11|15)/.test(nextLineNum) && nextLineNum.length >= 8) {
-                                                            telefono = nextLineNum;
-                                                        }
-                                                    }
+                                                // Si encontramos "DUPLICADO" o empezamos a ver las notas en la Columna D -> STOP
+                                                if (rowStr.includes("DUPLICADO") || (typeof celdaNotas === 'string' && (celdaNotas.includes("SURTIDO") || celdaNotas.includes("TOTAL") || celdaNotas.includes("BULTOS")))) {
+                                                    if (typeof celdaNotas === 'string') textoAclaraciones = celdaNotas; // Capturamos la nota si fue el trigger
+                                                    break; 
+                                                }
+
+                                                const cant = row[1]; // Col B
+                                                const cod = row[7];  // Col H
+                                                
+                                                if (typeof cant === 'number' && cod) {
+                                                    articulos.push({
+                                                        cantidad: cant,
+                                                        codigo: String(cod).trim(),
+                                                        detalle: "" // <--- CAMBIO: Inicializamos vacío, ignoramos descripción del Excel
+                                                    });
                                                 }
                                             }
 
-                                            const articulos: any[] = [];
-                                            productosRaw.split(/\r?\n/).filter(Boolean).forEach(l => {
-                                                const partes = l.trim().split(/\s+/);
-                                                if (partes.length >= 2) {
-                                                    const cantidad = parseFloat(partes.shift()!.replace(",", "."));
-                                                    const codigo = partes.join(" ");
-                                                    if (codigo && !isNaN(cantidad)) articulos.push({ codigo, cantidad, detalle: "" });
-                                                }
-                                            });
-                                            
-                                            if (aclaracionesRaw) {
-                                                const lineasAclara = aclaracionesRaw.split(/\r?\n|\/\//).map(l => l.trim()).filter(Boolean);
-                                                lineasAclara.forEach(linea => {
+                                            // 3. ASIGNAR ACLARACIONES (AHORA ES EL ÚNICO CONTENIDO DE DETALLE)
+                                            if (textoAclaraciones) {
+                                                const lineas = textoAclaraciones.split(/\r?\n/);
+                                                lineas.forEach(linea => {
+                                                    const lineaLimpia = linea.toUpperCase().replace(/\s+/g, ""); 
+                                                    
                                                     articulos.forEach(item => {
-                                                        const codNorm = item.codigo.replace(/\s+/g, "");
-                                                        if (linea.replace(/\s+/g, "").includes(codNorm)) {
-                                                            let detalleExtra = linea.replace(item.codigo, "").trim();
-                                                            if (detalleExtra) item.detalle = item.detalle ? item.detalle + " | " + detalleExtra : detalleExtra;
+                                                        const codigoLimpio = item.codigo.toUpperCase().replace(/\s+/g, "");
+                                                        
+                                                        if (lineaLimpia.includes(codigoLimpio)) {
+                                                            let detalleExtra = linea.replace(item.codigo, "").replace(item.codigo.split(' ')[0], "").trim(); 
+                                                            
+                                                            if (detalleExtra && !detalleExtra.includes("TOTAL") && !detalleExtra.includes("BULTOS")) {
+                                                                // Como 'detalle' empieza vacío, aquí solo quedará la aclaración
+                                                                item.detalle = item.detalle ? `${item.detalle} | ${detalleExtra}` : detalleExtra;
+                                                            }
                                                         }
                                                     });
                                                 });
                                             }
 
+                                            // 4. GUARDADO
                                             await push(ref(db_realtime, 'remitos'), {
-                                                numeroRemito, fechaEmision, cliente, 
-                                                telefono, 
-                                                articulos, aclaraciones: aclaracionesRaw,
-                                                produccion: necesitaProduccion, esTransporte, estado: null, estadoPreparacion: "Pendiente",
-                                                rangoDespacho: "", notificado: false, timestamp: new Date().toISOString()
+                                                numeroRemito: nroRemito,
+                                                fechaEmision,
+                                                cliente,
+                                                telefono,
+                                                articulos,
+                                                aclaraciones: textoAclaraciones,
+                                                produccion: necesitaProduccion,
+                                                esTransporte,
+                                                estadoPreparacion: "Pendiente",
+                                                timestamp: new Date().toISOString(),
+                                                notificado: false,
+                                                rangoDespacho: ""
                                             });
-                                        } else {
-                                            await push(ref(db_realtime, 'soportes'), {
-                                                numeroSoporte: soporteData.numero, 
-                                                cliente: soporteData.cliente,
-                                                telefono: soporteData.telefono,
-                                                fechaSoporte: soporteData.fecha, 
-                                                productos: soporteData.productos.split('\n').filter(Boolean),
-                                                estado: "Pendiente", 
-                                                rangoEntrega: "", 
-                                                notificado: false, 
-                                                timestamp: new Date().toISOString()
-                                            });
+
+                                            alert(`✅ EXITO:\nRemito: ${nroRemito}\nItems: ${articulos.length}`);
+                                            setSidebarOpen(false);
+                                            
+                                        } catch (err) {
+                                            console.error(err);
+                                            alert("❌ Error procesando Excel.");
+                                        } finally {
+                                            setLoading(false);
                                         }
-                                        alert("✅ Guardado correctamente");
-                                        setSidebarOpen(false);
-                                        setDatosRemitoRaw(''); setProductosRaw(''); setAclaracionesRaw(''); setEsTransporte(false); setNecesitaProduccion(false);
-                                    } catch (e) { alert("❌ Error al guardar"); }
-                                    setLoading(false);
-                                }} className="w-full mt-6 p-5 bg-cyan-600 text-black rounded-xl font-black font-mono uppercase tracking-widest shadow-[0_0_20px_rgba(8,145,178,0.4)] hover:bg-cyan-400 hover:scale-[1.02] transition-all disabled:bg-slate-800 disabled:text-slate-600 disabled:shadow-none">
-                                    {loading ? 'UPLOADING...' : 'EJECUTAR CARGA'}
-                                </button>
-                            )}
+                                    };
+                                    reader.readAsBinaryString(file);
+                                }}
+                            />
+                            <div className="pointer-events-none">
+                                <span className="text-5xl mb-4 block group-hover:scale-110 transition-transform">📄</span>
+                                <p className="text-cyan-400 font-bold uppercase text-xs tracking-widest">Cargar Remito</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-3">
+                            <label className="flex items-center gap-3 p-4 bg-slate-900/50 rounded-xl border cursor-pointer border-slate-700 hover:border-cyan-500 transition-all group">
+                                <input type="checkbox" checked={esTransporte} onChange={e => setEsTransporte(e.target.checked)} className="w-5 h-5 rounded bg-black border-slate-600 text-cyan-600 focus:ring-0" />
+                                <span className="text-[11px] font-black text-slate-400 uppercase italic group-hover:text-cyan-400 transition-colors">Es Transporte</span>
+                            </label>
+                            <label className="flex items-center gap-3 p-4 bg-slate-900/50 rounded-xl border cursor-pointer border-slate-700 hover:border-green-500 transition-all group">
+                                <input type="checkbox" checked={necesitaProduccion} onChange={e => setNecesitaProduccion(e.target.checked)} className="w-5 h-5 rounded bg-black border-slate-600 text-green-600 focus:ring-0" />
+                                <span className="text-[11px] font-black text-slate-400 uppercase italic text-green-600/70 group-hover:text-green-400 transition-colors">Requiere Producción</span>
+                            </label>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
+
+                {/* --- BLOQUE SOPORTE --- */}
+                {tipoCarga === 'soporte' && (
+                    <div className="space-y-4 animate-in fade-in duration-500">
+                        <input type="text" placeholder="ID REF" className="w-full p-4 bg-slate-900/80 rounded-xl font-bold font-mono uppercase text-sm border border-slate-700 text-white focus:border-violet-500 outline-none" value={soporteData.numero} onChange={e => setSoporteData({...soporteData, numero: e.target.value})} />
+                        <input type="text" placeholder="NOMBRE CLIENTE" className="w-full p-4 bg-slate-900/80 rounded-xl font-bold font-mono uppercase text-sm border border-slate-700 text-white focus:border-violet-500 outline-none" value={soporteData.cliente} onChange={e => setSoporteData({...soporteData, cliente: e.target.value})} />
+                        <input type="text" placeholder="CONTACTO (OPCIONAL)" className="w-full p-4 bg-slate-900/80 rounded-xl font-bold font-mono uppercase text-sm border border-slate-700 text-white focus:border-violet-500 outline-none" value={soporteData.telefono} onChange={e => setSoporteData({...soporteData, telefono: e.target.value})} />
+                        <input type="date" className="w-full p-4 bg-slate-900/80 rounded-xl font-bold text-sm border border-slate-700 uppercase text-slate-400 focus:text-white outline-none" value={soporteData.fecha} onChange={e => setSoporteData({...soporteData, fecha: e.target.value})} />
+                        <textarea rows={5} placeholder="COMPONENTES..." className="w-full p-4 bg-slate-900/80 rounded-xl border border-slate-700 font-bold font-mono uppercase text-sm text-violet-300 outline-none focus:border-violet-500" value={soporteData.productos} onChange={e => setSoporteData({...soporteData, productos: e.target.value})} />
+                        
+                        <button disabled={loading} onClick={async () => {
+                            setLoading(true);
+                            try {
+                                await push(ref(db_realtime, 'soportes'), {
+                                    numeroSoporte: soporteData.numero, 
+                                    cliente: soporteData.cliente,
+                                    telefono: soporteData.telefono,
+                                    fechaSoporte: soporteData.fecha, 
+                                    productos: soporteData.productos.split('\n').filter(Boolean),
+                                    estado: "Pendiente", 
+                                    rangoEntrega: "", 
+                                    notificado: false, 
+                                    timestamp: new Date().toISOString()
+                                });
+                                alert("✅ Guardado correctamente");
+                                setSidebarOpen(false);
+                                setSoporteData({ numero: '', cliente: '', telefono: '', fecha: new Date().toISOString().split('T')[0], productos: '' });
+                            } catch (e) { alert("❌ Error al guardar"); }
+                            setLoading(false);
+                        }} className="w-full mt-2 p-5 bg-violet-600 text-white rounded-xl font-black font-mono uppercase tracking-widest shadow-[0_0_20px_rgba(139,92,246,0.4)] hover:bg-violet-500 hover:scale-[1.02] transition-all disabled:bg-slate-800 disabled:text-slate-600 disabled:shadow-none">
+                            {loading ? 'GUARDANDO...' : 'GUARDAR SOPORTE'}
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+    </div>
+)}
 
                 {/* ---------------------------------------------------------- */}
             {/* BLOQUE MODAL FIRMA (PEGAR AL FINAL DEL RETURN)             */}

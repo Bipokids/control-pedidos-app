@@ -110,7 +110,7 @@ const AppContent = () => {
     };
     
     const titulo = nombres[paginaActual] || 'App';
-    document.title = `${titulo} | Nebula Control`;
+    document.title = `${titulo} | Gestión Bipokids`;
   }, [paginaActual]);
 
   useEffect(() => {
