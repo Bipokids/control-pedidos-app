@@ -31,6 +31,7 @@ const ControlDeRemitos: React.FC = () => {
     const [aclaracionesRaw, setAclaracionesRaw] = useState('');
     const [esTransporte, setEsTransporte] = useState(false);
     const [necesitaProduccion, setNecesitaProduccion] = useState(false);
+    const [remitosPendientes, setRemitosPendientes] = useState<any[]>([]);
 
     const [soporteData, setSoporteData] = useState({
         numero: '',
@@ -952,35 +953,40 @@ const ControlDeRemitos: React.FC = () => {
                     </div>
                 )}
 
-            {/* SIDEBAR DE CARGA - MULTI-UPLOAD (BATCH PROCESSING) */}
+            {/* SIDEBAR DE CARGA - CON ÁREA DE PREPARACIÓN (STAGING) */}
 {sidebarOpen && (
     <div className="fixed inset-0 z-[100] flex justify-end">
         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
-        <div className="relative w-full max-w-lg bg-[#050b14] h-full shadow-[-20px_0_50px_rgba(0,0,0,0.5)] border-l border-cyan-900/50 p-8 overflow-y-auto animate-in slide-in-from-right duration-300">
-            <div className="flex justify-between items-center mb-10 border-b border-cyan-900 pb-4">
+        <div className="relative w-full max-w-lg bg-[#050b14] h-full shadow-[-20px_0_50px_rgba(0,0,0,0.5)] border-l border-cyan-900/50 p-8 overflow-y-auto animate-in slide-in-from-right duration-300 flex flex-col">
+            
+            {/* HEADER */}
+            <div className="flex justify-between items-center mb-6 border-b border-cyan-900 pb-4 shrink-0">
                 <h2 className="text-2xl font-black italic uppercase text-white tracking-tighter drop-shadow-[0_0_5px_cyan]">PANEL DE CARGA</h2>
                 <button onClick={() => setSidebarOpen(false)} className="text-slate-500 hover:text-cyan-400 text-2xl font-bold transition-colors">✕</button>
             </div>
             
-            <div className="space-y-8">
+            <div className="space-y-6 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                
+                {/* SELECTOR DE MODO */}
                 <div>
                     <label className="text-[10px] font-mono text-cyan-600 uppercase tracking-widest block mb-2">Protocolo de Carga</label>
-                    <select value={tipoCarga} onChange={(e) => setTipoCarga(e.target.value as any)} className="w-full p-4 bg-slate-900/50 border border-slate-700 rounded-xl font-bold font-mono uppercase text-sm text-cyan-100 outline-none focus:border-cyan-500 focus:shadow-[0_0_15px_rgba(6,182,212,0.2)] transition-all">
+                    <select value={tipoCarga} onChange={(e) => setTipoCarga(e.target.value as any)} className="w-full p-4 bg-slate-900/50 border border-slate-700 rounded-xl font-bold font-mono uppercase text-sm text-cyan-100 outline-none focus:border-cyan-500 transition-all">
                         <option value="">-- SELECCIONAR --</option>
                         <option value="remito">Remito</option>
                         <option value="soporte">Soporte</option>
                     </select>
                 </div>
 
-                {/* --- BLOQUE REMITO (MULTI-ARCHIVO) --- */}
+                {/* --- BLOQUE REMITO (STAGING) --- */}
                 {tipoCarga === 'remito' && (
                     <div className="space-y-6 animate-in fade-in duration-500">
                         
-                        <div className="border-2 border-dashed border-cyan-900/50 rounded-2xl p-10 text-center bg-slate-900/30 hover:bg-cyan-900/10 transition-all group relative cursor-pointer">
+                        {/* DROPZONE: Solo visible si NO hay pendientes, o para agregar más */}
+                        <div className="border-2 border-dashed border-cyan-900/50 rounded-2xl p-6 text-center bg-slate-900/30 hover:bg-cyan-900/10 transition-all group relative cursor-pointer">
                             <input 
                                 type="file" 
                                 accept=".xlsx, .xls, .csv" 
-                                multiple // <--- ¡LA CLAVE PARA CARGAR VARIOS!
+                                multiple 
                                 className="absolute inset-0 opacity-0 cursor-pointer z-50" 
                                 onClick={(e) => (e.currentTarget.value = '')}
                                 onChange={async (e) => {
@@ -988,143 +994,166 @@ const ControlDeRemitos: React.FC = () => {
                                     if (!files || files.length === 0) return;
                                     setLoading(true);
                                     
-                                    // Función para procesar UN solo archivo (promisificada)
-                                    const processFile = (file: File) => new Promise<{ status: 'ok' | 'error', id?: string, msg?: string }>((resolve) => {
-                                        const reader = new FileReader();
-                                        
-                                        reader.onload = async (evt) => {
-                                            try {
-                                                const { read, utils } = await import('xlsx');
-                                                const bstr = evt.target?.result;
-                                                const wb = read(bstr, { type: 'binary' });
-                                                const ws = wb.Sheets[wb.SheetNames[0]];
-                                                const data: any[][] = utils.sheet_to_json(ws, { header: 1 });
+                                    // Procesamos y guardamos en ESTADO LOCAL (remitosPendientes)
+                                    // Necesitas agregar este estado arriba en tu componente: 
+                                    // const [remitosPendientes, setRemitosPendientes] = useState<any[]>([]);
 
-                                                // --- LÓGICA DE EXTRACCIÓN (LA MISMA QUE YA FUNCIONA) ---
-                                                const nroRemito = data[5]?.[26] || "Sin número"; 
-                                                const fechaRaw = data[7]?.[28]; 
-                                                const fechaEmision = typeof fechaRaw === 'number' 
-                                                    ? new Date((fechaRaw - 25569) * 86400 * 1000).toLocaleDateString() 
-                                                    : String(fechaRaw || new Date().toLocaleDateString());
-                                                const cliente = data[15]?.[8] || "Sin nombre";
-                                                const telRaw = String(data[21]?.[8] || "");      
-                                                const telefono = telRaw.replace(/\D/g, ''); 
+                                    // Dentro del onChange del input file...
 
-                                                const articulos: any[] = [];
-                                                let textoAclaraciones = "";
+const processFile = (file: File) => new Promise<any>((resolve) => {
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+        try {
+            const { read, utils } = await import('xlsx');
+            const wb = read(evt.target?.result, { type: 'binary' });
+            const data: any[][] = utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
 
-                                                for (let i = 31; i < data.length; i++) {
-                                                    const row = data[i];
-                                                    if (!row) continue;
+            // --- EXTRACCIÓN ---
+            const nroRemito = data[5]?.[26] || "Sin número"; // <--- La variable se llama nroRemito
+            const fechaRaw = data[7]?.[28]; 
+            const fechaEmision = typeof fechaRaw === 'number' 
+                ? new Date((fechaRaw - 25569) * 86400 * 1000).toLocaleDateString() 
+                : String(fechaRaw || new Date().toLocaleDateString());
+            const cliente = data[15]?.[8] || "Sin nombre";
+            const telRaw = String(data[21]?.[8] || "");      
+            const telefono = telRaw.replace(/\D/g, ''); 
 
-                                                    const rowStr = row.join(' ').toUpperCase();
-                                                    const celdaNotas = row[3];
-                                                    
-                                                    // Freno en Duplicados o Notas
-                                                    if (rowStr.includes("DUPLICADO") || (typeof celdaNotas === 'string' && (celdaNotas.includes("SURTIDO") || celdaNotas.includes("TOTAL") || celdaNotas.includes("BULTOS")))) {
-                                                        if (typeof celdaNotas === 'string') textoAclaraciones = celdaNotas;
-                                                        break; 
-                                                    }
+            const articulos: any[] = [];
+            let textoAclaraciones = "";
 
-                                                    const cant = row[1]; 
-                                                    const cod = row[7];
-                                                    
-                                                    if (typeof cant === 'number' && cod) {
-                                                        articulos.push({
-                                                            cantidad: cant,
-                                                            codigo: String(cod).trim(),
-                                                            detalle: "" 
-                                                        });
-                                                    }
-                                                }
+            for (let i = 31; i < data.length; i++) {
+                const row = data[i];
+                if (!row) continue;
+                const rowStr = row.join(' ').toUpperCase();
+                const celdaNotas = row[3];
+                
+                if (rowStr.includes("DUPLICADO") || (typeof celdaNotas === 'string' && (celdaNotas.includes("SURTIDO") || celdaNotas.includes("TOTAL") || celdaNotas.includes("BULTOS")))) {
+                    if (typeof celdaNotas === 'string') textoAclaraciones = celdaNotas;
+                    break; 
+                }
 
-                                                // Procesar Notas
-                                                if (textoAclaraciones) {
-                                                    const lineas = textoAclaraciones.split(/\r?\n/);
-                                                    lineas.forEach(linea => {
-                                                        const lineaLimpia = linea.toUpperCase().replace(/\s+/g, ""); 
-                                                        articulos.forEach(item => {
-                                                            const codigoLimpio = item.codigo.toUpperCase().replace(/\s+/g, "");
-                                                            if (lineaLimpia.includes(codigoLimpio)) {
-                                                                let detalleExtra = linea.replace(item.codigo, "").replace(item.codigo.split(' ')[0], "").trim(); 
-                                                                if (detalleExtra && !detalleExtra.includes("TOTAL") && !detalleExtra.includes("BULTOS")) {
-                                                                    item.detalle = item.detalle ? `${item.detalle} | ${detalleExtra}` : detalleExtra;
-                                                                }
-                                                            }
-                                                        });
-                                                    });
-                                                }
+                const cant = row[1]; 
+                const cod = row[7];
+                if (typeof cant === 'number' && cod) {
+                    articulos.push({ cantidad: cant, codigo: String(cod).trim(), detalle: "" });
+                }
+            }
 
-                                                // Guardado
-                                                await push(ref(db_realtime, 'remitos'), {
-                                                    numeroRemito: nroRemito,
-                                                    fechaEmision,
-                                                    cliente,
-                                                    telefono,
-                                                    articulos,
-                                                    aclaraciones: textoAclaraciones,
-                                                    produccion: necesitaProduccion,
-                                                    esTransporte,
-                                                    estadoPreparacion: "Pendiente",
-                                                    timestamp: new Date().toISOString(),
-                                                    notificado: false,
-                                                    rangoDespacho: ""
-                                                });
+            if (textoAclaraciones) {
+                const lineas = textoAclaraciones.split(/\r?\n/);
+                lineas.forEach(linea => {
+                    const lineaLimpia = linea.toUpperCase().replace(/\s+/g, ""); 
+                    articulos.forEach(item => {
+                        const codigoLimpio = item.codigo.toUpperCase().replace(/\s+/g, "");
+                        if (lineaLimpia.includes(codigoLimpio)) {
+                            let detalleExtra = linea.replace(item.codigo, "").replace(item.codigo.split(' ')[0], "").trim(); 
+                            if (detalleExtra && !detalleExtra.includes("TOTAL") && !detalleExtra.includes("BULTOS")) {
+                                item.detalle = item.detalle ? `${item.detalle} | ${detalleExtra}` : detalleExtra;
+                            }
+                        }
+                    });
+                });
+            }
 
-                                                resolve({ status: 'ok', id: nroRemito });
-                                                
-                                            } catch (err) {
-                                                console.error(err);
-                                                resolve({ status: 'error', msg: file.name });
-                                            }
-                                        };
-                                        reader.readAsBinaryString(file);
-                                    });
+            // RETORNAMOS EL OBJETO CON LA CORRECCIÓN
+            resolve({
+                tempId: Math.random().toString(36),
+                numeroRemito: nroRemito, // <--- CORRECCIÓN AQUÍ: Asignamos nroRemito a la propiedad numeroRemito
+                fechaEmision, 
+                cliente, 
+                telefono, 
+                articulos,
+                aclaraciones: textoAclaraciones,
+                produccion: necesitaProduccion, 
+                esTransporte: esTransporte,
+                estadoPreparacion: "Pendiente", 
+                notificado: false, 
+                rangoDespacho: ""
+            });
+            
+        } catch (err) { resolve(null); }
+    };
+    reader.readAsBinaryString(file);
+});
 
-                                    // --- EJECUCIÓN EN PARALELO (BATCH) ---
-                                    // Convertimos FileList a Array y mapeamos cada archivo a una promesa
-                                    const results = await Promise.all(Array.from(files).map(file => processFile(file)));
-                                    
-                                    // --- REPORTE FINAL ---
-                                    const exitosos = results.filter(r => r.status === 'ok');
-                                    const fallidos = results.filter(r => r.status === 'error');
-                                    
-                                    let mensaje = `🏁 PROCESO TERMINADO\n\n✅ Cargados: ${exitosos.length}`;
-                                    if (exitosos.length > 0) mensaje += `\n(Último ID: ${exitosos[exitosos.length-1].id})`;
-                                    
-                                    if (fallidos.length > 0) {
-                                        mensaje += `\n\n❌ Fallidos: ${fallidos.length}\nArchivos: ${fallidos.map(f => f.msg).join(', ')}`;
-                                    }
-
-                                    alert(mensaje);
-                                    
-                                    if (exitosos.length > 0) {
-                                        setSidebarOpen(false);
-                                    }
+                                    const nuevosRemitos = await Promise.all(Array.from(files).map(f => processFile(f)));
+                                    // Filtramos nulos y agregamos a la lista de pendientes
+                                    const validos = nuevosRemitos.filter(r => r !== null);
+                                    setRemitosPendientes(prev => [...prev, ...validos]);
                                     setLoading(false);
                                 }}
                             />
                             <div className="pointer-events-none">
-                                <span className="text-5xl mb-4 block group-hover:scale-110 transition-transform">📚</span>
-                                <p className="text-cyan-400 font-bold uppercase text-xs tracking-widest">Subir Múltiples Remitos</p>
-                                <p className="text-slate-500 text-[10px] mt-2 font-mono">Arrastra o selecciona uno o varios archivos</p>
+                                <span className="text-3xl mb-2 block group-hover:scale-110 transition-transform">📂</span>
+                                <p className="text-cyan-400 font-bold uppercase text-[10px] tracking-widest">Agregar Archivos</p>
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-3">
-                            <label className="flex items-center gap-3 p-4 bg-slate-900/50 rounded-xl border cursor-pointer border-slate-700 hover:border-cyan-500 transition-all group">
-                                <input type="checkbox" checked={esTransporte} onChange={e => setEsTransporte(e.target.checked)} className="w-5 h-5 rounded bg-black border-slate-600 text-cyan-600 focus:ring-0" />
-                                <span className="text-[11px] font-black text-slate-400 uppercase italic group-hover:text-cyan-400 transition-colors">Es Transporte</span>
-                            </label>
-                            <label className="flex items-center gap-3 p-4 bg-slate-900/50 rounded-xl border cursor-pointer border-slate-700 hover:border-green-500 transition-all group">
-                                <input type="checkbox" checked={necesitaProduccion} onChange={e => setNecesitaProduccion(e.target.checked)} className="w-5 h-5 rounded bg-black border-slate-600 text-green-600 focus:ring-0" />
-                                <span className="text-[11px] font-black text-slate-400 uppercase italic text-green-600/70 group-hover:text-green-400 transition-colors">Requiere Producción</span>
-                            </label>
-                        </div>
+                        {/* LISTA DE PENDIENTES (STAGING AREA) */}
+                        {remitosPendientes.length > 0 && (
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-end">
+                                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                                        Por Confirmar ({remitosPendientes.length})
+                                    </h3>
+                                    <button onClick={() => setRemitosPendientes([])} className="text-[10px] text-red-400 hover:text-red-200 underline">Limpiar todo</button>
+                                </div>
+
+                                {remitosPendientes.map((remito, index) => (
+                                    <div key={remito.tempId} className="bg-slate-900/80 border border-slate-700 rounded-xl p-4 animate-in zoom-in duration-200 relative group">
+                                        {/* Botón Eliminar Individual */}
+                                        <button 
+                                            onClick={() => setRemitosPendientes(prev => prev.filter((_, i) => i !== index))}
+                                            className="absolute top-2 right-2 text-slate-600 hover:text-red-500 font-bold p-1"
+                                            title="Quitar"
+                                        >✕</button>
+
+                                        <div className="mb-3 pr-6">
+                                            <p className="text-cyan-400 font-mono font-bold text-xs">{remito.numeroRemito}</p>
+                                            <p className="text-white font-bold text-sm truncate">{remito.cliente}</p>
+                                            <p className="text-[10px] text-slate-500 mt-1">{remito.articulos.length} items detectados</p>
+                                        </div>
+
+                                        {/* CONTROLES INDIVIDUALES */}
+                                        <div className="flex gap-2">
+                                            <button 
+                                                onClick={() => {
+                                                    const updated = [...remitosPendientes];
+                                                    updated[index].esTransporte = !updated[index].esTransporte;
+                                                    setRemitosPendientes(updated);
+                                                }}
+                                                className={`flex-1 py-2 px-1 rounded-lg text-[10px] font-black uppercase border transition-all ${
+                                                    remito.esTransporte 
+                                                    ? 'bg-cyan-900/40 text-cyan-300 border-cyan-500/50' 
+                                                    : 'bg-slate-950 text-slate-600 border-slate-800 hover:border-slate-600'
+                                                }`}
+                                            >
+                                                {remito.esTransporte ? '🚛 Transporte SI' : '🚛 Transporte NO'}
+                                            </button>
+
+                                            <button 
+                                                onClick={() => {
+                                                    const updated = [...remitosPendientes];
+                                                    updated[index].produccion = !updated[index].produccion;
+                                                    setRemitosPendientes(updated);
+                                                }}
+                                                className={`flex-1 py-2 px-1 rounded-lg text-[10px] font-black uppercase border transition-all ${
+                                                    remito.produccion 
+                                                    ? 'bg-green-900/40 text-green-300 border-green-500/50' 
+                                                    : 'bg-slate-950 text-slate-600 border-slate-800 hover:border-slate-600'
+                                                }`}
+                                            >
+                                                {remito.produccion ? '⚙️ Producción SI' : '⚙️ Producción NO'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
 
-                {/* --- BLOQUE SOPORTE --- */}
+                {/* --- BLOQUE SOPORTE (MANUAL) --- */}
                 {tipoCarga === 'soporte' && (
                     <div className="space-y-4 animate-in fade-in duration-500">
                         <input type="text" placeholder="ID REF" className="w-full p-4 bg-slate-900/80 rounded-xl font-bold font-mono uppercase text-sm border border-slate-700 text-white focus:border-violet-500 outline-none" value={soporteData.numero} onChange={e => setSoporteData({...soporteData, numero: e.target.value})} />
@@ -1132,30 +1161,43 @@ const ControlDeRemitos: React.FC = () => {
                         <input type="text" placeholder="CONTACTO (OPCIONAL)" className="w-full p-4 bg-slate-900/80 rounded-xl font-bold font-mono uppercase text-sm border border-slate-700 text-white focus:border-violet-500 outline-none" value={soporteData.telefono} onChange={e => setSoporteData({...soporteData, telefono: e.target.value})} />
                         <input type="date" className="w-full p-4 bg-slate-900/80 rounded-xl font-bold text-sm border border-slate-700 uppercase text-slate-400 focus:text-white outline-none" value={soporteData.fecha} onChange={e => setSoporteData({...soporteData, fecha: e.target.value})} />
                         <textarea rows={5} placeholder="COMPONENTES..." className="w-full p-4 bg-slate-900/80 rounded-xl border border-slate-700 font-bold font-mono uppercase text-sm text-violet-300 outline-none focus:border-violet-500" value={soporteData.productos} onChange={e => setSoporteData({...soporteData, productos: e.target.value})} />
-                        
-                        <button disabled={loading} onClick={async () => {
+                    </div>
+                )}
+            </div>
+
+            {/* FOOTER ACTIONS (FIJO ABAJO) */}
+            <div className="pt-4 mt-4 border-t border-cyan-900/30 shrink-0">
+                {tipoCarga === 'remito' ? (
+                    <button 
+                        disabled={loading || remitosPendientes.length === 0} 
+                        onClick={async () => {
                             setLoading(true);
                             try {
-                                await push(ref(db_realtime, 'soportes'), {
-                                    numeroSoporte: soporteData.numero, 
-                                    cliente: soporteData.cliente,
-                                    telefono: soporteData.telefono,
-                                    fechaSoporte: soporteData.fecha, 
-                                    productos: soporteData.productos.split('\n').filter(Boolean),
-                                    estado: "Pendiente", 
-                                    rangoEntrega: "", 
-                                    notificado: false, 
-                                    timestamp: new Date().toISOString()
-                                });
-                                alert("✅ Guardado correctamente");
+                                const promises = remitosPendientes.map(({ tempId, ...data }) => 
+                                    push(ref(db_realtime, 'remitos'), {
+                                        ...data,
+                                        timestamp: new Date().toISOString()
+                                    })
+                                );
+                                await Promise.all(promises);
+                                alert(`✅ Se guardaron ${remitosPendientes.length} remitos correctamente.`);
+                                setRemitosPendientes([]);
                                 setSidebarOpen(false);
-                                setSoporteData({ numero: '', cliente: '', telefono: '', fecha: new Date().toISOString().split('T')[0], productos: '' });
-                            } catch (e) { alert("❌ Error al guardar"); }
+                            } catch (e) { alert("❌ Error al guardar."); }
                             setLoading(false);
-                        }} className="w-full mt-2 p-5 bg-violet-600 text-white rounded-xl font-black font-mono uppercase tracking-widest shadow-[0_0_20px_rgba(139,92,246,0.4)] hover:bg-violet-500 hover:scale-[1.02] transition-all disabled:bg-slate-800 disabled:text-slate-600 disabled:shadow-none">
-                            {loading ? 'GUARDANDO...' : 'GUARDAR SOPORTE'}
-                        </button>
-                    </div>
+                        }} 
+                        className="w-full p-5 bg-cyan-600 text-black rounded-xl font-black font-mono uppercase tracking-widest shadow-[0_0_20px_rgba(8,145,178,0.4)] hover:bg-cyan-400 hover:scale-[1.02] transition-all disabled:bg-slate-800 disabled:text-slate-600 disabled:shadow-none disabled:transform-none"
+                    >
+                        {loading ? 'PROCESANDO...' : `CONFIRMAR (${remitosPendientes.length})`}
+                    </button>
+                ) : (
+                    <button 
+                        disabled={loading} 
+                        onClick={guardarDatos} // Usamos la función existente para soporte o reescribimos aquí si prefieres
+                        className="w-full p-5 bg-violet-600 text-white rounded-xl font-black font-mono uppercase tracking-widest shadow-[0_0_20px_rgba(139,92,246,0.4)] hover:bg-violet-500 hover:scale-[1.02] transition-all disabled:bg-slate-800 disabled:text-slate-600"
+                    >
+                        {loading ? 'GUARDANDO...' : 'GUARDAR SOPORTE'}
+                    </button>
                 )}
             </div>
         </div>
