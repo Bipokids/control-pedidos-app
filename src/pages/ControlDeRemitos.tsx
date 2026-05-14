@@ -761,7 +761,7 @@ const ControlDeRemitos: React.FC = () => {
                     </div>
                 </button>
 
-                {/* MODAL DETALLE (EDICIÓN TOTAL) */}
+                {/* MODAL DETALLE (EDICIÓN TOTAL + CAMBIO DE MODO) */}
 {modalDetalle.open && modalDetalle.data && (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md" onClick={() => setModalDetalle({ open: false, data: null })}>
         <div className="bg-[#0f172a] rounded-[2rem] p-6 w-full max-w-lg shadow-[0_0_50px_rgba(6,182,212,0.2)] border border-cyan-500/30 animate-in fade-in zoom-in duration-300 relative overflow-hidden flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
@@ -818,10 +818,10 @@ const ControlDeRemitos: React.FC = () => {
                     </div>
                     
                     <ul className="space-y-3">
-                        {/* LISTA DE ARTICULOS EDITABLES (REMITOS) */}
+                        {/* LISTA DE ARTICULOS EDITABLES */}
                         {modalDetalle.data.numeroRemito && Array.isArray(modalDetalle.data.articulos) && modalDetalle.data.articulos.map((art: any, i: number) => (
                             <li key={i} className="text-sm font-bold text-slate-300 border-b border-slate-800 pb-2 last:border-0 last:pb-0 flex items-start gap-3 font-mono min-h-[2rem] group/item">
-                                {/* Cantidad Editable */}
+                                {/* Cantidad */}
                                 <span 
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -834,12 +834,11 @@ const ControlDeRemitos: React.FC = () => {
                                         }
                                     }}
                                     className="bg-cyan-900/40 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded text-xs min-w-[30px] text-center mt-0.5 cursor-pointer hover:bg-cyan-800/60 hover:border-cyan-400 transition-colors"
-                                    title="Clic para editar cantidad"
                                 >
                                     {art.cantidad}
                                 </span>
                                 
-                                {/* Descripción y Detalle Editables */}
+                                {/* Descripción y Detalle */}
                                 <div className="flex-1 pt-0.5">
                                     <p 
                                         onClick={(e) => {
@@ -853,7 +852,6 @@ const ControlDeRemitos: React.FC = () => {
                                             }
                                         }}
                                         className="uppercase leading-tight cursor-pointer hover:text-cyan-400 transition-colors"
-                                        title="Clic para editar nombre"
                                     >
                                         {art.codigo}
                                     </p>
@@ -870,7 +868,6 @@ const ControlDeRemitos: React.FC = () => {
                                             }
                                         }}
                                         className={`text-[10px] italic font-normal mt-0.5 cursor-pointer hover:text-cyan-400 transition-colors ${art.detalle ? "text-slate-500" : "text-slate-700"}`}
-                                        title="Clic para editar detalle"
                                     >
                                         {art.detalle || "+ Agregar detalle"}
                                     </p>
@@ -878,7 +875,7 @@ const ControlDeRemitos: React.FC = () => {
                             </li>
                         ))}
                         
-                        {/* LISTA DE SOPORTES EDITABLES */}
+                        {/* LISTA DE SOPORTES */}
                         {modalDetalle.data.numeroSoporte && Array.isArray(modalDetalle.data.productos) && modalDetalle.data.productos.map((prod: string, i: number) => (
                             <li key={i} className="text-sm font-bold text-slate-300 border-b border-slate-800 pb-2 last:border-0 last:pb-0 flex items-center gap-3 font-mono">
                                 <span className="text-violet-500">›</span>
@@ -901,7 +898,7 @@ const ControlDeRemitos: React.FC = () => {
                     </ul>
                 </div>
                 
-                {/* ACLARACIONES GLOBALES EDITABLES */}
+                {/* ACLARACIONES GLOBALES */}
                 <div className="bg-yellow-900/10 p-5 rounded-2xl border border-yellow-500/20 text-yellow-100 relative group/notes">
                     <div className="flex justify-between items-center mb-2">
                         <h4 className="text-[10px] font-black text-yellow-500 uppercase tracking-[0.2em] flex items-center gap-2">📝 Aclaraciones</h4>
@@ -929,11 +926,28 @@ const ControlDeRemitos: React.FC = () => {
                         <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Fecha</p>
                         <p className="text-xs font-bold text-cyan-400 font-mono mt-1">{modalDetalle.data.fechaEmision || modalDetalle.data.fechaSoporte || '-'}</p>
                     </div>
+                    
+                    {/* CAMPO MODO EDITABLE */}
                     {modalDetalle.data.numeroRemito && (
-                        <div className="bg-slate-900 p-3 rounded-xl border border-slate-800 text-center">
-                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Modo</p>
-                            <p className="text-xs font-bold text-cyan-400 font-mono mt-1 uppercase">{modalDetalle.data.esTransporte ? '🚛 Transporte' : '🏠 Local'}</p>
-                        </div>
+                        <button 
+                            onClick={() => {
+                                const nuevoEstado = !modalDetalle.data.esTransporte;
+                                // Opcional: confirmación si lo prefieres, si no, quita el if
+                                if(window.confirm(`¿Cambiar envío a ${nuevoEstado ? 'TRANSPORTE' : 'LOCAL'}?`)) {
+                                    update(ref(db_realtime, `remitos/${modalDetalle.data.id}`), { esTransporte: nuevoEstado });
+                                    setModalDetalle(prev => ({...prev, data: { ...prev.data, esTransporte: nuevoEstado }}));
+                                }
+                            }}
+                            className="bg-slate-900 p-3 rounded-xl border border-slate-800 text-center hover:bg-slate-800 transition-colors group/mode cursor-pointer w-full"
+                            title="Clic para cambiar entre Local y Transporte"
+                        >
+                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest group-hover/mode:text-cyan-400 transition-colors flex items-center justify-center gap-1">
+                                Modo <span>✏️</span>
+                            </p>
+                            <p className="text-xs font-bold text-cyan-400 font-mono mt-1 uppercase">
+                                {modalDetalle.data.esTransporte ? '🚛 Transporte' : '🏠 Local'}
+                            </p>
+                        </button>
                     )}
                 </div>
             </div>
