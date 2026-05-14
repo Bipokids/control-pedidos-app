@@ -13,6 +13,7 @@ import Estadisticas from './pages/Estadisticas';
 import SoportesRetirados from './pages/SoportesRetirados';
 import Pagos from './pages/Pagos';
 import Devoluciones from './pages/Devoluciones';
+import ControlStock from './pages/ControlStock'; // <-- NUEVO COMPONENTE
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 // Estilos globales para ocultar scrollbar
@@ -67,7 +68,7 @@ const AppContent = () => {
   
   // Estados de Alerta
   const [retirosPendientes, setRetirosPendientes] = useState(0);
-  const [pagosPendientes, setPagosPendientes] = useState(0); // NUEVO
+  const [pagosPendientes, setPagosPendientes] = useState(0);
 
   useEffect(() => {
     if (role !== 'admin') return;
@@ -106,7 +107,8 @@ const AppContent = () => {
       produccion: 'Producción',
       contador: 'Monitor',
       gestion_soportes: 'Taller',
-      usuarios: 'Usuarios'
+      usuarios: 'Usuarios',
+      control_stock: 'Control Stock' // <-- NUEVO TÍTULO
     };
     
     const titulo = nombres[paginaActual] || 'App';
@@ -115,8 +117,14 @@ const AppContent = () => {
 
   useEffect(() => {
     if (role === 'admin' && paginaActual === 'produccion') setPaginaActual('remitos');
-    if (role === 'vendedor' && paginaActual !== 'devoluciones') setPaginaActual('devoluciones');
-    if (role === 'produccion' && !['produccion', 'contador', 'gestion_soportes'].includes(paginaActual)) {
+    
+    // <-- PERMITIR A VENDEDOR VER CONTROL_STOCK SIN SER REDIRIGIDO A DEVOLUCIONES
+    if (role === 'vendedor' && !['devoluciones', 'control_stock'].includes(paginaActual)) {
+        setPaginaActual('devoluciones');
+    }
+    
+    // <-- PERMITIR A PRODUCCION VER CONTROL_STOCK SIN SER REDIRIGIDO A PRODUCCION
+    if (role === 'produccion' && !['produccion', 'contador', 'gestion_soportes', 'control_stock'].includes(paginaActual)) {
         setPaginaActual('produccion');
     }
   }, [role]);
@@ -138,14 +146,12 @@ const AppContent = () => {
         
         {/* --- PESTAÑA / INDICADOR VISUAL --- */}
         <div className="absolute right-0 top-0 h-full w-[14px] flex flex-col justify-center items-center pointer-events-none">
-            {/* Línea vertical guía de fondo */}
             <div className={`w-[1px] h-full transition-colors duration-500 ${hayAlertas ? 'bg-red-900/60' : 'bg-cyan-900/20'}`}></div>
 
-            {/* EL "MANGO" o PESTAÑA CENTRAL */}
             <div className={`absolute right-[4px] w-[6px] rounded-full transition-all duration-500 ease-in-out group-hover:opacity-0 shadow-lg ${
                 hayAlertas 
-                ? 'h-32 bg-red-500 shadow-[0_0_25px_red] animate-pulse' // Estado ALERTA
-                : 'h-16 bg-cyan-500 shadow-[0_0_15px_cyan]' // Estado NORMAL
+                ? 'h-32 bg-red-500 shadow-[0_0_25px_red] animate-pulse'
+                : 'h-16 bg-cyan-500 shadow-[0_0_15px_cyan]'
             }`}></div>
         </div>
 
@@ -175,7 +181,7 @@ const AppContent = () => {
                     onClick={() => setPaginaActual('pagos')} 
                     icon="💰" 
                     label="Pagos" 
-                    alertCount={pagosPendientes} // NUEVA ALERTA
+                    alertCount={pagosPendientes}
                 />
                 <NavButton active={paginaActual === 'estadisticas'} onClick={() => setPaginaActual('estadisticas')} icon="📊" label="Métricas" />
             </>
@@ -184,18 +190,24 @@ const AppContent = () => {
             {/* Separador */}
             {(role === 'admin' || role === 'produccion') && <div className="w-12 h-[1px] bg-slate-800 my-2 shrink-0"></div>}
 
-            {/* 2. GRUPO OPERATIVO */}
+            {/* 2. GRUPO OPERATIVO (ADMIN Y PRODUCCIÓN) */}
             {role !== 'vendedor' && (
                 <>
                     <NavButton active={paginaActual === 'contador'} onClick={() => setPaginaActual('contador')} icon="🔢" label="Contador" />
                     <NavButton active={paginaActual === 'produccion'} onClick={() => setPaginaActual('produccion')} icon="⚙️" label="Producción" />
                     <NavButton active={paginaActual === 'gestion_soportes'} onClick={() => setPaginaActual('gestion_soportes')} icon="🔧" label="Taller" />
+                    {/* <-- STOCK PARA PRODUCCION Y ADMIN --> */}
+                    <NavButton active={paginaActual === 'control_stock'} onClick={() => setPaginaActual('control_stock')} icon="📦" label="Stock" />
                 </>
             )}
 
             {/* 3. SOLO VENDEDOR */}
             {role === 'vendedor' && (
-                <NavButton active={paginaActual === 'devoluciones'} onClick={() => setPaginaActual('devoluciones')} icon="↩️" label="Devoluciones" />
+                <>
+                    <NavButton active={paginaActual === 'devoluciones'} onClick={() => setPaginaActual('devoluciones')} icon="↩️" label="Devoluciones" />
+                    {/* <-- STOCK PARA VENDEDOR --> */}
+                    <NavButton active={paginaActual === 'control_stock'} onClick={() => setPaginaActual('control_stock')} icon="📦" label="Stock" />
+                </>
             )}
 
             {/* 4. GRUPO INFERIOR (ADMIN) */}
@@ -245,6 +257,9 @@ const AppContent = () => {
                 {paginaActual === 'gestion_soportes' && <GestionSoportes />}
             </>
         )}
+
+        {/* <-- RENDERIZADO DEL NUEVO COMPONENTE PARA TODOS LOS ROLES --> */}
+        {paginaActual === 'control_stock' && <ControlStock />}
 
       </main>
 
