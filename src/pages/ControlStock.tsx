@@ -135,7 +135,7 @@ const ControlStock: React.FC = () => {
                 bultosNumericos <= 0
             )
         ) {
-            return alert("Si el estado es POCAS UNIDADES, tenés que indicar cuántos bultos quedan. Debe ser un número entero mayor a 0.");
+            return alert("Si el estado es POCAS UNIDADES, tenés que indicar cuántas unidades quedan. Debe ser un número entero mayor a 0.");
         }
 
         const articuloUpper = articulo.toUpperCase().trim();
@@ -224,7 +224,7 @@ const ControlStock: React.FC = () => {
                             <p className="text-sm font-bold text-white uppercase">
                                 {alertaReciente.articulo} ({alertaReciente.variante}) - <span className={alertaReciente.estado === 'AGOTADO' ? 'text-red-500' : 'text-amber-500'}>{alertaReciente.estado}</span>
                                 {alertaReciente.estado === 'POCAS UNIDADES' && alertaReciente.bultos != null && (
-                                    <span className="text-amber-300"> · 📦 {alertaReciente.bultos} bulto{alertaReciente.bultos === 1 ? '' : 's'}</span>
+                                    <span className="text-amber-300"> · 📦 {alertaReciente.bultos} unidad{alertaReciente.bultos === 1 ? '' : 'es'}</span>
                                 )}
                             </p>
                         </div>
@@ -309,7 +309,7 @@ const ControlStock: React.FC = () => {
 
                                     {estado === "POCAS UNIDADES" && (
                                         <div>
-                                            <label className="text-[10px] font-black text-amber-400 uppercase tracking-widest ml-2 mb-2 block font-mono">BULTOS RESTANTES *</label>
+                                            <label className="text-[10px] font-black text-amber-400 uppercase tracking-widest ml-2 mb-2 block font-mono">UNIDADES RESTANTES *</label>
                                             <input
                                                 type="number"
                                                 min="1"
@@ -417,7 +417,7 @@ const ControlStock: React.FC = () => {
 
                                                         {varData.estado === 'POCAS UNIDADES' && varData.bultos != null && (
                                                             <span className="text-[9px] font-black px-2 py-1 rounded uppercase font-mono tracking-wide bg-slate-800/80 text-amber-300 border border-amber-500/20">
-                                                                📦 {varData.bultos} bulto{varData.bultos === 1 ? '' : 's'}
+                                                                📦 {varData.bultos} unidad{varData.bultos === 1 ? '' : 'es'}
                                                             </span>
                                                         )}
 
