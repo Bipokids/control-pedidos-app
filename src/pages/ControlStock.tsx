@@ -8,6 +8,7 @@ interface VarianteData {
     estado: 'POCAS UNIDADES' | 'AGOTADO';
     usuario: string;
     timestamp: number;
+    bultos?: number | null;
 }
 
 interface ArticuloStock {
@@ -33,9 +34,10 @@ const ControlStock: React.FC = () => {
     const [articulo, setArticulo] = useState("");
     const [variante, setVariante] = useState("");
     const [estado, setEstado] = useState<"POCAS UNIDADES" | "AGOTADO" | "">("");
+    const [bultos, setBultos] = useState("");
 
     // Alertas en tiempo real
-    const [alertaReciente, setAlertaReciente] = useState<{ articulo: string, variante: string, estado: string } | null>(null);
+    const [alertaReciente, setAlertaReciente] = useState<{ articulo: string, variante: string, estado: string, bultos?: number | null } | null>(null);
     const [loadTime] = useState(Date.now());
 
     // --- CARGA DE DATOS ---
@@ -49,14 +51,24 @@ const ControlStock: React.FC = () => {
                     let variantesObj = val.variantes;
                     if (!variantesObj && val.estado) {
                         variantesObj = {
-                            [val.variante || "ÚNICA"]: { estado: val.estado, usuario: val.usuario, timestamp: val.timestamp }
+                            [val.variante || "ÚNICA"]: {
+                                estado: val.estado,
+                                usuario: val.usuario,
+                                timestamp: val.timestamp,
+                                bultos: val.bultos ?? null
+                            }
                         };
                     }
 
                     if (variantesObj) {
                         Object.entries(variantesObj).forEach(([vKey, vData]: [string, any]) => {
                             todasLasVariantes.push({
-                                articulo: val.articulo, variante: vKey, estado: vData.estado, usuario: vData.usuario, timestamp: vData.timestamp
+                                articulo: val.articulo,
+                                variante: vKey,
+                                estado: vData.estado,
+                                usuario: vData.usuario,
+                                timestamp: vData.timestamp,
+                                bultos: vData.bultos ?? null
                             });
                         });
                     }
@@ -68,7 +80,12 @@ const ControlStock: React.FC = () => {
                 if (itemsNuevos.length > 0) {
                     const ultimo = itemsNuevos.sort((a, b) => b.timestamp - a.timestamp)[0];
                     if (ultimo.usuario !== user?.email) {
-                        setAlertaReciente({ articulo: ultimo.articulo, variante: ultimo.variante, estado: ultimo.estado });
+                        setAlertaReciente({
+                            articulo: ultimo.articulo,
+                            variante: ultimo.variante,
+                            estado: ultimo.estado,
+                            bultos: ultimo.bultos ?? null
+                        });
                         setTimeout(() => setAlertaReciente(null), 8000); 
                     }
                 }
@@ -108,6 +125,19 @@ const ControlStock: React.FC = () => {
     const guardarInformacion = async () => {
         if (!articulo || !estado) return alert("Falta ingresar artículo y estado");
 
+        const bultosNumericos = Number(bultos);
+        if (
+            estado === "POCAS UNIDADES" &&
+            (
+                !bultos.trim() ||
+                Number.isNaN(bultosNumericos) ||
+                !Number.isInteger(bultosNumericos) ||
+                bultosNumericos <= 0
+            )
+        ) {
+            return alert("Si el estado es POCAS UNIDADES, tenés que indicar cuántos bultos quedan. Debe ser un número entero mayor a 0.");
+        }
+
         const articuloUpper = articulo.toUpperCase().trim();
         const varianteUpper = variante.toUpperCase().trim() || "ÚNICA";
         const varianteKey = varianteUpper.replace(/[.#$[\]]/g, ''); 
@@ -118,7 +148,8 @@ const ControlStock: React.FC = () => {
             const payloadVariante = {
                 estado,
                 usuario: user?.email || "Desconocido",
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                bultos: estado === "POCAS UNIDADES" ? bultosNumericos : null
             };
 
             if (articuloExistente) {
@@ -137,6 +168,7 @@ const ControlStock: React.FC = () => {
                 articulo: articuloUpper,
                 variante: varianteUpper,
                 estado: estado,
+                bultos: estado === "POCAS UNIDADES" ? bultosNumericos : null,
                 usuario: user?.email || "Desconocido",
                 timestamp: Date.now()
             });
@@ -152,6 +184,7 @@ const ControlStock: React.FC = () => {
         setArticulo(articuloNombre);
         setVariante(varKey === "ÚNICA" ? "" : varKey);
         setEstado(varData.estado);
+        setBultos(varData.estado === "POCAS UNIDADES" && varData.bultos != null ? String(varData.bultos) : "");
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
@@ -169,6 +202,7 @@ const ControlStock: React.FC = () => {
         setArticulo("");
         setVariante("");
         setEstado("");
+        setBultos("");
     };
 
     if (loading) return <div className="min-h-screen bg-[#050b14] flex items-center justify-center"><div className="text-red-500 font-mono animate-pulse uppercase tracking-widest">LOADING STOCK SYSTEMS...</div></div>;
@@ -187,7 +221,12 @@ const ControlStock: React.FC = () => {
                         </span>
                         <div>
                             <p className="text-[10px] font-black text-red-400 uppercase tracking-[0.2em] font-mono">Actualización de Stock Detectada</p>
-                            <p className="text-sm font-bold text-white uppercase">{alertaReciente.articulo} ({alertaReciente.variante}) - <span className={alertaReciente.estado === 'AGOTADO' ? 'text-red-500' : 'text-amber-500'}>{alertaReciente.estado}</span></p>
+                            <p className="text-sm font-bold text-white uppercase">
+                                {alertaReciente.articulo} ({alertaReciente.variante}) - <span className={alertaReciente.estado === 'AGOTADO' ? 'text-red-500' : 'text-amber-500'}>{alertaReciente.estado}</span>
+                                {alertaReciente.estado === 'POCAS UNIDADES' && alertaReciente.bultos != null && (
+                                    <span className="text-amber-300"> · 📦 {alertaReciente.bultos} bulto{alertaReciente.bultos === 1 ? '' : 's'}</span>
+                                )}
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -256,13 +295,32 @@ const ControlStock: React.FC = () => {
                                         <label className="text-[10px] font-black text-red-400 uppercase tracking-widest ml-2 mb-2 block font-mono">ESTADO DE STOCK *</label>
                                         <select 
                                             value={estado}
-                                            onChange={(e) => setEstado(e.target.value as any)}
+                                            onChange={(e) => {
+                                                const nuevoEstado = e.target.value as "POCAS UNIDADES" | "AGOTADO" | "";
+                                                setEstado(nuevoEstado);
+                                                if (nuevoEstado !== "POCAS UNIDADES") setBultos("");
+                                            }}
                                             className="w-full p-4 bg-black/40 border border-slate-700 rounded-xl font-bold font-mono text-sm outline-none focus:border-red-500 text-white uppercase cursor-pointer appearance-none transition-all"
                                         >
                                             <option value="">-- SELECCIONAR --</option>
                                             {ESTADOS_STOCK.map(m => <option key={m} value={m}>{m}</option>)}
                                         </select>
                                     </div>
+
+                                    {estado === "POCAS UNIDADES" && (
+                                        <div>
+                                            <label className="text-[10px] font-black text-amber-400 uppercase tracking-widest ml-2 mb-2 block font-mono">BULTOS RESTANTES *</label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                step="1"
+                                                placeholder="EJ: 3"
+                                                value={bultos}
+                                                onChange={(e) => setBultos(e.target.value)}
+                                                className="w-full p-4 bg-black/40 border border-slate-700 rounded-xl font-bold font-mono text-sm outline-none focus:border-amber-500 text-white placeholder-slate-600 transition-all uppercase focus:shadow-[0_0_15px_rgba(245,158,11,0.2)]"
+                                            />
+                                        </div>
+                                    )}
 
                                     <button 
                                         onClick={guardarInformacion}
@@ -356,7 +414,13 @@ const ControlStock: React.FC = () => {
                                                         }`}>
                                                             {varData.estado}
                                                         </span>
-                                                        
+
+                                                        {varData.estado === 'POCAS UNIDADES' && varData.bultos != null && (
+                                                            <span className="text-[9px] font-black px-2 py-1 rounded uppercase font-mono tracking-wide bg-slate-800/80 text-amber-300 border border-amber-500/20">
+                                                                📦 {varData.bultos} bulto{varData.bultos === 1 ? '' : 's'}
+                                                            </span>
+                                                        )}
+
                                                         {canEdit && (
                                                             <button 
                                                                 onClick={(e) => { 
