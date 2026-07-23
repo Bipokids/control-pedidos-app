@@ -3,6 +3,89 @@ import { db_realtime } from '../firebase/config';
 import { ref, onValue, update, set, remove, push } from "firebase/database";
 import type { Remito, Soporte } from '../types';
 
+
+type TipoVarianteArticulo = 'talle' | 'color' | 'modelo';
+
+type TiposVariantesArticulo = {
+    talle: boolean;
+    color: boolean;
+    modelo: boolean;
+};
+
+type CombinacionVarianteArticulo = {
+    cantidad: number;
+    talle?: string;
+    color?: string;
+    modelo?: string;
+};
+
+type ConfiguracionVariantesArticulo = {
+    tipos: TiposVariantesArticulo;
+    combinaciones: CombinacionVarianteArticulo[];
+};
+
+type ModalVariantesArticuloState = {
+    remitoId: string;
+    articuloIndex: number;
+    articulo: any;
+    configuracion?: ConfiguracionVariantesArticulo;
+};
+
+type CombinacionVarianteEditor = {
+    cantidad: string;
+    talle: string;
+    color: string;
+    modelo: string;
+};
+
+const TIPOS_VARIANTE_ARTICULO: Array<{
+    id: TipoVarianteArticulo;
+    titulo: string;
+    ejemplo: string;
+}> = [
+    { id: 'talle', titulo: 'Talle', ejemplo: 'Ej.: 34, M, XL' },
+    { id: 'color', titulo: 'Color', ejemplo: 'Ej.: Rojo, Azul' },
+    { id: 'modelo', titulo: 'Modelo', ejemplo: 'Ej.: Pro, Urban' }
+];
+
+const crearTiposVariantesVacios = (): TiposVariantesArticulo => ({
+    talle: false,
+    color: false,
+    modelo: false
+});
+
+const claveVarianteArticulo = (articuloIndex: number): string =>
+    `item_${articuloIndex}`;
+
+const obtenerTiposVariantesActivos = (
+    configuracion?: ConfiguracionVariantesArticulo | null
+): TipoVarianteArticulo[] => {
+    if (!configuracion?.tipos) return [];
+
+    return TIPOS_VARIANTE_ARTICULO
+        .map(tipo => tipo.id)
+        .filter(tipo => Boolean(configuracion.tipos[tipo]));
+};
+
+const etiquetaTipoVariante = (tipo: TipoVarianteArticulo): string => {
+    if (tipo === 'talle') return 'Talle';
+    if (tipo === 'color') return 'Color';
+    return 'Modelo';
+};
+
+const describirCombinacionVariante = (
+    combinacion: CombinacionVarianteArticulo,
+    tipos: TipoVarianteArticulo[]
+): string => {
+    return tipos
+        .map(tipo => {
+            const valor = combinacion[tipo];
+            return valor ? `${etiquetaTipoVariante(tipo)}: ${valor}` : '';
+        })
+        .filter(Boolean)
+        .join(' · ');
+};
+
 const ControlDeRemitos: React.FC = () => {
     // -------------------------------------------------------------------------
     // 1. ESTADOS Y CONFIGURACIÓN
@@ -11,6 +94,7 @@ const ControlDeRemitos: React.FC = () => {
     const [soportes, setSoportes] = useState<Record<string, Soporte>>({});
     const [despachos, setDespachos] = useState<any>({});
     const [tablaManual, setTablaManual] = useState<any>({});
+    const [variantesRemitos, setVariantesRemitos] = useState<Record<string, Record<string, ConfiguracionVariantesArticulo>>>({});
     
     // Interfaz y Filtros
     const [filtro, setFiltro] = useState("");
@@ -23,6 +107,7 @@ const ControlDeRemitos: React.FC = () => {
     const [modalFirma, setModalFirma] = useState<{ open: boolean, data: any, type: 'remito' | 'soporte' }>({ open: false, data: null, type: 'remito' });
     const [modalDetalle, setModalDetalle] = useState<{ open: boolean, data: any | null }>({ open: false, data: null });
     const [modalWhatsapp, setModalWhatsapp] = useState<{ open: boolean, remito: any, nuevoRango: string } | null>(null);
+    const [modalVariantes, setModalVariantes] = useState<ModalVariantesArticuloState | null>(null);
 
     // Estados del Formulario
     const [tipoCarga, setTipoCarga] = useState<'remito' | 'soporte' | ''>('');
@@ -52,9 +137,17 @@ const ControlDeRemitos: React.FC = () => {
         const unsubSoportes = onValue(ref(db_realtime, 'soportes'), (snapshot) => setSoportes(snapshot.val() || {}));
         const unsubDespachos = onValue(ref(db_realtime, 'despachos'), (snapshot) => setDespachos(snapshot.val() || {}));
         const unsubManual = onValue(ref(db_realtime, 'tablaManual'), (snapshot) => setTablaManual(snapshot.val() || {}));
+        const unsubVariantes = onValue(
+            ref(db_realtime, 'variantesRemitos'),
+            snapshot => setVariantesRemitos(snapshot.val() || {})
+        );
 
         return () => { 
-            unsubRemitos(); unsubSoportes(); unsubDespachos(); unsubManual(); 
+            unsubRemitos();
+            unsubSoportes();
+            unsubDespachos();
+            unsubManual();
+            unsubVariantes();
         };
     }, []);
 
@@ -151,6 +244,52 @@ const ControlDeRemitos: React.FC = () => {
     // -------------------------------------------------------------------------
     // 4. FUNCIONES AUXILIARES
     // -------------------------------------------------------------------------
+
+    const abrirEditorVariantes = (
+        articuloIndex: number,
+        articulo: any
+    ) => {
+        if (!modalDetalle.data?.id) return;
+
+        const remitoId = modalDetalle.data.id;
+        const configuracion =
+            variantesRemitos[remitoId]?.[claveVarianteArticulo(articuloIndex)];
+
+        setModalVariantes({
+            remitoId,
+            articuloIndex,
+            articulo,
+            configuracion
+        });
+    };
+
+    const guardarVariantesArticulo = async (
+        configuracion: ConfiguracionVariantesArticulo | null
+    ) => {
+        if (!modalVariantes) return;
+
+        const ruta = `variantesRemitos/${modalVariantes.remitoId}/${claveVarianteArticulo(modalVariantes.articuloIndex)}`;
+        const referenciaVariantes = ref(db_realtime, ruta);
+
+        if (configuracion === null) {
+            await remove(referenciaVariantes);
+        } else {
+            await set(referenciaVariantes, {
+                articuloIndex:
+                    modalVariantes.articuloIndex,
+                codigo: String(
+                    modalVariantes.articulo?.codigo || ''
+                ).trim(),
+                cantidadArticulo: Number(
+                    modalVariantes.articulo?.cantidad || 0
+                ),
+                ...configuracion,
+                actualizadoEn: new Date().toISOString()
+            });
+        }
+
+        setModalVariantes(null);
+    };
 
     const enviarMensajeWhatsapp = (data: any, rango: string) => {
         const telefonoStr = data.telefono ? String(data.telefono) : "";
@@ -301,11 +440,28 @@ const ControlDeRemitos: React.FC = () => {
         });
     };
 
-    const eliminarItem = (id: string, type: string) => {
-        if(window.confirm("¿Eliminar este registro entregado permanentemente?")) {
-            const path = type === 'remito' ? 'remitos' : 'soportes';
-            remove(ref(db_realtime, `${path}/${id}`));
+    const eliminarItem = async (id: string, type: string) => {
+        if (!window.confirm("¿Eliminar este registro entregado permanentemente?")) {
+            return;
         }
+
+        const path = type === 'remito' ? 'remitos' : 'soportes';
+        const operaciones = [
+            remove(ref(db_realtime, `${path}/${id}`))
+        ];
+
+        if (type === 'remito') {
+            operaciones.push(
+                remove(
+                    ref(
+                        db_realtime,
+                        `variantesRemitos/${id}`
+                    )
+                )
+            );
+        }
+
+        await Promise.all(operaciones);
     };
 
     // -------------------------------------------------------------------------
@@ -819,62 +975,159 @@ const ControlDeRemitos: React.FC = () => {
                     
                     <ul className="space-y-3">
                         {/* LISTA DE ARTICULOS EDITABLES */}
-                        {modalDetalle.data.numeroRemito && Array.isArray(modalDetalle.data.articulos) && modalDetalle.data.articulos.map((art: any, i: number) => (
-                            <li key={i} className="text-sm font-bold text-slate-300 border-b border-slate-800 pb-2 last:border-0 last:pb-0 flex items-start gap-3 font-mono min-h-[2rem] group/item">
-                                {/* Cantidad */}
-                                <span 
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        const val = prompt("Editar Cantidad:", art.cantidad);
-                                        if (val !== null) {
-                                            const nuevosArticulos = [...modalDetalle.data.articulos];
-                                            nuevosArticulos[i] = { ...art, cantidad: val };
-                                            update(ref(db_realtime, `remitos/${modalDetalle.data.id}`), { articulos: nuevosArticulos });
-                                            setModalDetalle(prev => ({...prev, data: { ...prev.data, articulos: nuevosArticulos }}));
-                                        }
-                                    }}
-                                    className="bg-cyan-900/40 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded text-xs min-w-[30px] text-center mt-0.5 cursor-pointer hover:bg-cyan-800/60 hover:border-cyan-400 transition-colors"
+                        {modalDetalle.data.numeroRemito && Array.isArray(modalDetalle.data.articulos) && modalDetalle.data.articulos.map((art: any, i: number) => {
+                            const configuracionVariantes =
+                                variantesRemitos[modalDetalle.data.id]?.[claveVarianteArticulo(i)] as
+                                    ConfiguracionVariantesArticulo | undefined;
+                            const tiposVariantes = obtenerTiposVariantesActivos(configuracionVariantes);
+                            const combinacionesVariantes = Array.isArray(configuracionVariantes?.combinaciones)
+                                ? configuracionVariantes!.combinaciones
+                                : [];
+                            const totalVariantes = combinacionesVariantes.reduce(
+                                (total: number, combinacion: CombinacionVarianteArticulo) =>
+                                    total + Number(combinacion.cantidad || 0),
+                                0
+                            );
+                            const cantidadArticulo = Number(art.cantidad || 0);
+                            const variantesCompletas =
+                                tiposVariantes.length > 0 &&
+                                combinacionesVariantes.length > 0 &&
+                                totalVariantes === cantidadArticulo;
+
+                            return (
+                                <li
+                                    key={i}
+                                    className="text-sm font-bold text-slate-300 border-b border-slate-800 pb-4 last:border-0 last:pb-0 font-mono group/item"
                                 >
-                                    {art.cantidad}
-                                </span>
-                                
-                                {/* Descripción y Detalle */}
-                                <div className="flex-1 pt-0.5">
-                                    <p 
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            const val = prompt("Editar Nombre del Item:", art.codigo);
-                                            if (val !== null) {
-                                                const nuevosArticulos = [...modalDetalle.data.articulos];
-                                                nuevosArticulos[i] = { ...art, codigo: val };
-                                                update(ref(db_realtime, `remitos/${modalDetalle.data.id}`), { articulos: nuevosArticulos });
-                                                setModalDetalle(prev => ({...prev, data: { ...prev.data, articulos: nuevosArticulos }}));
-                                            }
-                                        }}
-                                        className="uppercase leading-tight cursor-pointer hover:text-cyan-400 transition-colors"
-                                    >
-                                        {art.codigo}
-                                    </p>
-                                    
-                                    <p 
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            const val = prompt("Editar Aclaración del Item:", art.detalle || "");
-                                            if (val !== null) {
-                                                const nuevosArticulos = [...modalDetalle.data.articulos];
-                                                nuevosArticulos[i] = { ...art, detalle: val };
-                                                update(ref(db_realtime, `remitos/${modalDetalle.data.id}`), { articulos: nuevosArticulos });
-                                                setModalDetalle(prev => ({...prev, data: { ...prev.data, articulos: nuevosArticulos }}));
-                                            }
-                                        }}
-                                        className={`text-[10px] italic font-normal mt-0.5 cursor-pointer hover:text-cyan-400 transition-colors ${art.detalle ? "text-slate-500" : "text-slate-700"}`}
-                                    >
-                                        {art.detalle || "+ Agregar detalle"}
-                                    </p>
-                                </div>
-                            </li>
-                        ))}
-                        
+                                    <div className="flex items-start gap-3 min-h-[2rem]">
+                                        <span
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                const val = prompt("Editar Cantidad:", art.cantidad);
+                                                if (val !== null) {
+                                                    const nuevosArticulos = [...modalDetalle.data.articulos];
+                                                    nuevosArticulos[i] = { ...art, cantidad: val };
+                                                    update(ref(db_realtime, `remitos/${modalDetalle.data.id}`), { articulos: nuevosArticulos });
+                                                    setModalDetalle(prev => ({...prev, data: { ...prev.data, articulos: nuevosArticulos }}));
+                                                }
+                                            }}
+                                            className="bg-cyan-900/40 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded text-xs min-w-[30px] text-center mt-0.5 cursor-pointer hover:bg-cyan-800/60 hover:border-cyan-400 transition-colors"
+                                        >
+                                            {art.cantidad}
+                                        </span>
+
+                                        <div className="flex-1 pt-0.5">
+                                            <p
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    const val = prompt("Editar Nombre del Item:", art.codigo);
+                                                    if (val !== null) {
+                                                        const nuevosArticulos = [...modalDetalle.data.articulos];
+                                                        nuevosArticulos[i] = { ...art, codigo: val };
+                                                        update(ref(db_realtime, `remitos/${modalDetalle.data.id}`), { articulos: nuevosArticulos });
+                                                        setModalDetalle(prev => ({...prev, data: { ...prev.data, articulos: nuevosArticulos }}));
+                                                    }
+                                                }}
+                                                className="uppercase leading-tight cursor-pointer hover:text-cyan-400 transition-colors"
+                                            >
+                                                {art.codigo}
+                                            </p>
+
+                                            <p
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    const val = prompt("Editar Aclaración del Item:", art.detalle || "");
+                                                    if (val !== null) {
+                                                        const nuevosArticulos = [...modalDetalle.data.articulos];
+                                                        nuevosArticulos[i] = { ...art, detalle: val };
+                                                        update(ref(db_realtime, `remitos/${modalDetalle.data.id}`), { articulos: nuevosArticulos });
+                                                        setModalDetalle(prev => ({...prev, data: { ...prev.data, articulos: nuevosArticulos }}));
+                                                    }
+                                                }}
+                                                className={`text-[10px] italic font-normal mt-0.5 cursor-pointer hover:text-cyan-400 transition-colors ${art.detalle ? "text-slate-500" : "text-slate-700"}`}
+                                            >
+                                                {art.detalle || "+ Agregar detalle"}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-3 ml-[42px] rounded-xl border border-slate-800 bg-black/20 p-3">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                {tiposVariantes.length > 0 ? (
+                                                    <>
+                                                        <span className={`px-2 py-1 rounded-md border text-[9px] font-black uppercase tracking-wider ${
+                                                            variantesCompletas
+                                                                ? 'bg-emerald-900/30 text-emerald-300 border-emerald-500/40'
+                                                                : 'bg-amber-900/30 text-amber-300 border-amber-500/40'
+                                                        }`}>
+                                                            {variantesCompletas ? 'Variantes completas' : 'Revisar variantes'}
+                                                        </span>
+
+                                                        {tiposVariantes.map(tipo => (
+                                                            <span
+                                                                key={tipo}
+                                                                className="px-2 py-1 rounded-md bg-violet-900/30 text-violet-300 border border-violet-500/30 text-[9px] font-black uppercase"
+                                                            >
+                                                                {etiquetaTipoVariante(tipo)}
+                                                            </span>
+                                                        ))}
+                                                    </>
+                                                ) : (
+                                                    <span className="px-2 py-1 rounded-md bg-slate-900 text-slate-500 border border-slate-700 text-[9px] font-black uppercase tracking-wider">
+                                                        Sin variantes
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    abrirEditorVariantes(i, art);
+                                                }}
+                                                className="px-3 py-1.5 rounded-lg bg-violet-900/30 text-violet-300 border border-violet-500/40 hover:bg-violet-800/40 hover:text-violet-100 transition-all text-[9px] font-black uppercase tracking-wider"
+                                            >
+                                                {tiposVariantes.length > 0 ? 'Editar variantes' : 'Configurar variantes'}
+                                            </button>
+                                        </div>
+
+                                        {tiposVariantes.length > 0 && (
+                                            <div className="mt-3 space-y-1.5">
+                                                <p className={`text-[9px] font-bold ${
+                                                    variantesCompletas ? 'text-emerald-400' : 'text-amber-400'
+                                                }`}>
+                                                    {combinacionesVariantes.length} combinaciones · {totalVariantes}/{art.cantidad} unidades asignadas
+                                                </p>
+
+                                                {combinacionesVariantes.map(
+                                                    (
+                                                        combinacion: CombinacionVarianteArticulo,
+                                                        combinacionIndex: number
+                                                    ) => (
+                                                        <div
+                                                            key={combinacionIndex}
+                                                            className="flex items-start gap-2 rounded-lg bg-slate-950/70 px-2.5 py-2 text-[9px]"
+                                                        >
+                                                            <span className="shrink-0 font-black text-cyan-300">
+                                                                {combinacion.cantidad}x
+                                                            </span>
+                                                            <span className="text-slate-400">
+                                                                {describirCombinacionVariante(
+                                                                    combinacion,
+                                                                    tiposVariantes
+                                                                )}
+                                                            </span>
+                                                        </div>
+                                                    )
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </li>
+                            );
+                        })}
+
                         {/* LISTA DE SOPORTES */}
                         {modalDetalle.data.numeroSoporte && Array.isArray(modalDetalle.data.productos) && modalDetalle.data.productos.map((prod: string, i: number) => (
                             <li key={i} className="text-sm font-bold text-slate-300 border-b border-slate-800 pb-2 last:border-0 last:pb-0 flex items-center gap-3 font-mono">
@@ -979,7 +1232,22 @@ const ControlDeRemitos: React.FC = () => {
                                 const path = modalDetalle.data.numeroRemito ? 'remitos' : 'soportes';
                                 const id = (modalDetalle.data).id;
                                 
-                                remove(ref(db_realtime, `${path}/${id}`))
+                                const operaciones = [
+                                    remove(ref(db_realtime, `${path}/${id}`))
+                                ];
+
+                                if (path === 'remitos') {
+                                    operaciones.push(
+                                        remove(
+                                            ref(
+                                                db_realtime,
+                                                `variantesRemitos/${id}`
+                                            )
+                                        )
+                                    );
+                                }
+
+                                Promise.all(operaciones)
                                     .then(() => {
                                         setModalDetalle({ open: false, data: null });
                                     })
@@ -995,6 +1263,14 @@ const ControlDeRemitos: React.FC = () => {
         </div>
     </div>
 )}
+                {modalVariantes && (
+                    <ModalVariantesArticulo
+                        modal={modalVariantes}
+                        onCerrar={() => setModalVariantes(null)}
+                        onGuardar={guardarVariantesArticulo}
+                    />
+                )}
+
                 {/* MODAL WHATSAPP */}
                 {modalWhatsapp && (
                     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
@@ -1339,6 +1615,546 @@ const processFile = (file: File) => new Promise<any>((resolve) => {
         </div>
     );
 };
+
+
+function ModalVariantesArticulo({
+    modal,
+    onCerrar,
+    onGuardar
+}: {
+    modal: ModalVariantesArticuloState;
+    onCerrar: () => void;
+    onGuardar: (
+        configuracion: ConfiguracionVariantesArticulo | null
+    ) => Promise<void>;
+}) {
+    const configuracionExistente =
+        modal.configuracion;
+
+    const crearCombinacionesIniciales = (): CombinacionVarianteEditor[] => {
+        const existentes = Array.isArray(configuracionExistente?.combinaciones)
+            ? configuracionExistente!.combinaciones
+            : [];
+
+        if (existentes.length > 0) {
+            return existentes.map(combinacion => ({
+                cantidad: String(combinacion.cantidad ?? ''),
+                talle: combinacion.talle || '',
+                color: combinacion.color || '',
+                modelo: combinacion.modelo || ''
+            }));
+        }
+
+        return [{
+            cantidad: String(modal.articulo?.cantidad ?? 1),
+            talle: '',
+            color: '',
+            modelo: ''
+        }];
+    };
+
+    const [tipos, setTipos] = useState<TiposVariantesArticulo>(() => ({
+        ...crearTiposVariantesVacios(),
+        ...(configuracionExistente?.tipos || {})
+    }));
+
+    const [combinaciones, setCombinaciones] =
+        useState<CombinacionVarianteEditor[]>(crearCombinacionesIniciales);
+
+    const [mensajeError, setMensajeError] = useState<string | null>(null);
+    const [guardando, setGuardando] = useState(false);
+
+    useEffect(() => {
+        const configuracion =
+            modal.configuracion;
+
+        setTipos({
+            ...crearTiposVariantesVacios(),
+            ...(configuracion?.tipos || {})
+        });
+
+        const existentes = Array.isArray(configuracion?.combinaciones)
+            ? configuracion!.combinaciones
+            : [];
+
+        setCombinaciones(
+            existentes.length > 0
+                ? existentes.map(combinacion => ({
+                    cantidad: String(combinacion.cantidad ?? ''),
+                    talle: combinacion.talle || '',
+                    color: combinacion.color || '',
+                    modelo: combinacion.modelo || ''
+                }))
+                : [{
+                    cantidad: String(modal.articulo?.cantidad ?? 1),
+                    talle: '',
+                    color: '',
+                    modelo: ''
+                }]
+        );
+
+        setMensajeError(null);
+        setGuardando(false);
+    }, [modal.remitoId, modal.articuloIndex, modal.articulo]);
+
+    const tiposActivos = TIPOS_VARIANTE_ARTICULO
+        .map(tipo => tipo.id)
+        .filter(tipo => tipos[tipo]);
+
+    const cantidadEsperada = Number(modal.articulo?.cantidad || 0);
+
+    const cantidadAsignada = combinaciones.reduce(
+        (total, combinacion) =>
+            total + Number(combinacion.cantidad || 0),
+        0
+    );
+
+    const actualizarTipo = (tipo: TipoVarianteArticulo) => {
+        setTipos(prev => ({
+            ...prev,
+            [tipo]: !prev[tipo]
+        }));
+        setMensajeError(null);
+    };
+
+    const actualizarCombinacion = (
+        index: number,
+        campo: keyof CombinacionVarianteEditor,
+        valor: string
+    ) => {
+        setCombinaciones(prev =>
+            prev.map((combinacion, combinacionIndex) =>
+                combinacionIndex === index
+                    ? { ...combinacion, [campo]: valor }
+                    : combinacion
+            )
+        );
+        setMensajeError(null);
+    };
+
+    const agregarCombinacion = () => {
+        setCombinaciones(prev => [
+            ...prev,
+            {
+                cantidad: '',
+                talle: '',
+                color: '',
+                modelo: ''
+            }
+        ]);
+        setMensajeError(null);
+    };
+
+    const eliminarCombinacion = (index: number) => {
+        setCombinaciones(prev =>
+            prev.filter((_, combinacionIndex) => combinacionIndex !== index)
+        );
+        setMensajeError(null);
+    };
+
+    const validarYGuardar = async () => {
+        if (tiposActivos.length === 0) {
+            setMensajeError(
+                "Seleccioná al menos un tipo de variante: talle, color o modelo."
+            );
+            return;
+        }
+
+        if (combinaciones.length === 0) {
+            setMensajeError(
+                "Agregá al menos una combinación."
+            );
+            return;
+        }
+
+        const normalizadas: CombinacionVarianteArticulo[] = [];
+
+        for (let index = 0; index < combinaciones.length; index += 1) {
+            const combinacion = combinaciones[index];
+            const cantidad = Number(combinacion.cantidad);
+
+            if (!Number.isInteger(cantidad) || cantidad <= 0) {
+                setMensajeError(
+                    `La cantidad de la combinación ${index + 1} debe ser un entero mayor a cero.`
+                );
+                return;
+            }
+
+            for (const tipo of tiposActivos) {
+                if (!combinacion[tipo].trim()) {
+                    setMensajeError(
+                        `Completá ${etiquetaTipoVariante(tipo).toLowerCase()} en la combinación ${index + 1}.`
+                    );
+                    return;
+                }
+            }
+
+            const resultado: CombinacionVarianteArticulo = {
+                cantidad
+            };
+
+            tiposActivos.forEach(tipo => {
+                resultado[tipo] =
+                    combinacion[tipo].trim();
+            });
+
+            normalizadas.push(resultado);
+        }
+
+        const total = normalizadas.reduce(
+            (suma, combinacion) =>
+                suma + combinacion.cantidad,
+            0
+        );
+
+        if (total !== cantidadEsperada) {
+            setMensajeError(
+                `Las variantes suman ${total} unidades y el artículo tiene ${cantidadEsperada}.`
+            );
+            return;
+        }
+
+        const claves = normalizadas.map(combinacion =>
+            tiposActivos
+                .map(tipo =>
+                    String(combinacion[tipo] || '')
+                        .trim()
+                        .toLocaleLowerCase()
+                )
+                .join('|')
+        );
+
+        if (new Set(claves).size !== claves.length) {
+            setMensajeError(
+                "Hay combinaciones repetidas. Unificá sus cantidades en una sola fila."
+            );
+            return;
+        }
+
+        setGuardando(true);
+        setMensajeError(null);
+
+        try {
+            await onGuardar({
+                tipos: {
+                    talle: tipos.talle,
+                    color: tipos.color,
+                    modelo: tipos.modelo
+                },
+                combinaciones: normalizadas
+            });
+        } catch (error) {
+            console.error(
+                "Error guardando variantes:",
+                error
+            );
+            setMensajeError(
+                "No se pudieron guardar las variantes."
+            );
+            setGuardando(false);
+        }
+    };
+
+    const quitarVariantes = async () => {
+        if (
+            !window.confirm(
+                "¿Quitar la configuración de variantes de este artículo?"
+            )
+        ) {
+            return;
+        }
+
+        setGuardando(true);
+        setMensajeError(null);
+
+        try {
+            await onGuardar(null);
+        } catch (error) {
+            console.error(
+                "Error quitando variantes:",
+                error
+            );
+            setMensajeError(
+                "No se pudieron quitar las variantes."
+            );
+            setGuardando(false);
+        }
+    };
+
+    const configurada =
+        obtenerTiposVariantesActivos(configuracionExistente).length > 0;
+
+    const cantidadesCoinciden =
+        cantidadAsignada === cantidadEsperada;
+
+    return (
+        <div className="fixed inset-0 z-[260] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+            <div className="relative flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-[2rem] border border-violet-500/30 bg-[#0f172a] shadow-[0_0_60px_rgba(139,92,246,0.22)]">
+                <div className="absolute left-0 top-0 h-1 w-full bg-gradient-to-r from-cyan-500 via-violet-500 to-fuchsia-500" />
+
+                <div className="shrink-0 border-b border-slate-800 p-6">
+                    <div className="flex items-start justify-between gap-4">
+                        <div>
+                            <div className="mb-2 flex flex-wrap items-center gap-2">
+                                <span className="rounded-md border border-violet-500/30 bg-violet-900/30 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-violet-300">
+                                    Configuración manual
+                                </span>
+
+                                <span className="rounded-md border border-cyan-500/30 bg-cyan-900/30 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-cyan-300">
+                                    {modal.articulo?.cantidad || 0} unidades
+                                </span>
+                            </div>
+
+                            <h3 className="text-xl font-black uppercase tracking-tight text-white">
+                                Variantes del artículo
+                            </h3>
+
+                            <p className="mt-1 text-sm font-bold text-cyan-300">
+                                {modal.articulo?.codigo || "Artículo sin código"}
+                            </p>
+
+                            <p className="mt-2 max-w-xl text-xs leading-relaxed text-slate-500">
+                                Elegí los atributos y distribuí la cantidad total entre sus combinaciones.
+                            </p>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={onCerrar}
+                            disabled={guardando}
+                            className="rounded-lg p-2 text-xl font-bold text-slate-500 transition-colors hover:bg-slate-800 hover:text-white disabled:opacity-40"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                </div>
+
+                <div className="flex-1 space-y-6 overflow-y-auto p-6 custom-scrollbar">
+                    <section>
+                        <h4 className="text-xs font-black uppercase tracking-[0.18em] text-violet-300">
+                            1. Tipos de variante
+                        </h4>
+
+                        <p className="mb-3 mt-1 text-[10px] text-slate-500">
+                            Un mismo artículo puede combinar talle, color y modelo.
+                        </p>
+
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            {TIPOS_VARIANTE_ARTICULO.map(tipo => {
+                                const activo = tipos[tipo.id];
+
+                                return (
+                                    <button
+                                        key={tipo.id}
+                                        type="button"
+                                        onClick={() => actualizarTipo(tipo.id)}
+                                        disabled={guardando}
+                                        className={`rounded-xl border p-4 text-left transition-all ${
+                                            activo
+                                                ? 'border-violet-400/60 bg-violet-900/35 shadow-[0_0_18px_rgba(139,92,246,0.14)]'
+                                                : 'border-slate-800 bg-slate-950/60 hover:border-slate-600'
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className={`text-sm font-black uppercase ${
+                                                activo ? 'text-violet-200' : 'text-slate-400'
+                                            }`}>
+                                                {tipo.titulo}
+                                            </span>
+
+                                            <span className={`flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-black ${
+                                                activo
+                                                    ? 'border-violet-400 bg-violet-500 text-white'
+                                                    : 'border-slate-600 text-transparent'
+                                            }`}>
+                                                ✓
+                                            </span>
+                                        </div>
+
+                                        <p className="mt-2 text-[10px] text-slate-600">
+                                            {tipo.ejemplo}
+                                        </p>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </section>
+
+                    <section>
+                        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+                            <div>
+                                <h4 className="text-xs font-black uppercase tracking-[0.18em] text-cyan-300">
+                                    2. Combinaciones
+                                </h4>
+
+                                <p className="mt-1 text-[10px] text-slate-500">
+                                    Cada fila representa una variante física.
+                                </p>
+                            </div>
+
+                            <div className={`rounded-lg border px-3 py-2 text-right ${
+                                cantidadesCoinciden
+                                    ? 'border-emerald-500/30 bg-emerald-900/20'
+                                    : 'border-amber-500/30 bg-amber-900/20'
+                            }`}>
+                                <p className="text-[8px] font-black uppercase tracking-wider text-slate-500">
+                                    Unidades asignadas
+                                </p>
+
+                                <p className={`text-sm font-black ${
+                                    cantidadesCoinciden
+                                        ? 'text-emerald-300'
+                                        : 'text-amber-300'
+                                }`}>
+                                    {cantidadAsignada} / {cantidadEsperada}
+                                </p>
+                            </div>
+                        </div>
+
+                        {tiposActivos.length === 0 ? (
+                            <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/40 p-6 text-center text-xs text-slate-500">
+                                Seleccioná al menos un tipo para habilitar las combinaciones.
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {combinaciones.map((combinacion, index) => (
+                                    <div
+                                        key={index}
+                                        className="rounded-2xl border border-slate-800 bg-slate-950/55 p-4"
+                                    >
+                                        <div className="mb-3 flex items-center justify-between gap-3">
+                                            <div className="flex items-center gap-2">
+                                                <span className="flex h-7 w-7 items-center justify-center rounded-full border border-cyan-500/30 bg-cyan-900/30 text-[10px] font-black text-cyan-300">
+                                                    {index + 1}
+                                                </span>
+
+                                                <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                                                    Combinación
+                                                </span>
+                                            </div>
+
+                                            {combinaciones.length > 1 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => eliminarCombinacion(index)}
+                                                    disabled={guardando}
+                                                    className="rounded-lg border border-red-500/30 bg-red-900/20 px-2.5 py-1.5 text-[9px] font-black uppercase text-red-300 hover:bg-red-900/40"
+                                                >
+                                                    Eliminar
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        <div className="grid gap-3 sm:grid-cols-2">
+                                            <label className="block">
+                                                <span className="mb-1.5 block text-[9px] font-black uppercase tracking-wider text-slate-500">
+                                                    Cantidad
+                                                </span>
+
+                                                <input
+                                                    type="number"
+                                                    min="1"
+                                                    step="1"
+                                                    value={combinacion.cantidad}
+                                                    onChange={event =>
+                                                        actualizarCombinacion(
+                                                            index,
+                                                            'cantidad',
+                                                            event.target.value
+                                                        )
+                                                    }
+                                                    disabled={guardando}
+                                                    className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-sm font-black text-cyan-200 outline-none transition-colors focus:border-cyan-500"
+                                                />
+                                            </label>
+
+                                            {tiposActivos.map(tipo => (
+                                                <label key={tipo} className="block">
+                                                    <span className="mb-1.5 block text-[9px] font-black uppercase tracking-wider text-slate-500">
+                                                        {etiquetaTipoVariante(tipo)}
+                                                    </span>
+
+                                                    <input
+                                                        type="text"
+                                                        value={combinacion[tipo]}
+                                                        onChange={event =>
+                                                            actualizarCombinacion(
+                                                                index,
+                                                                tipo,
+                                                                event.target.value
+                                                            )
+                                                        }
+                                                        disabled={guardando}
+                                                        placeholder={
+                                                            tipo === 'talle'
+                                                                ? 'Ej.: 34'
+                                                                : tipo === 'color'
+                                                                    ? 'Ej.: Azul'
+                                                                    : 'Ej.: Urban'
+                                                        }
+                                                        className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-sm font-bold text-white outline-none transition-colors placeholder:text-slate-700 focus:border-violet-500"
+                                                    />
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+
+                                <button
+                                    type="button"
+                                    onClick={agregarCombinacion}
+                                    disabled={guardando}
+                                    className="w-full rounded-xl border border-dashed border-violet-500/40 bg-violet-900/10 py-3 text-[10px] font-black uppercase tracking-wider text-violet-300 transition-colors hover:bg-violet-900/25"
+                                >
+                                    + Agregar combinación
+                                </button>
+                            </div>
+                        )}
+                    </section>
+
+                    {mensajeError && (
+                        <div className="rounded-xl border border-red-500/30 bg-red-900/20 px-4 py-3 text-xs font-bold leading-relaxed text-red-200">
+                            {mensajeError}
+                        </div>
+                    )}
+                </div>
+
+                <div className="shrink-0 border-t border-slate-800 bg-[#0b1322] p-5">
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                        {configurada && (
+                            <button
+                                type="button"
+                                onClick={quitarVariantes}
+                                disabled={guardando}
+                                className="rounded-xl border border-red-500/30 bg-red-900/15 px-4 py-3 text-[10px] font-black uppercase tracking-wider text-red-300 transition-colors hover:bg-red-900/30 disabled:opacity-40"
+                            >
+                                Quitar variantes
+                            </button>
+                        )}
+
+                        <button
+                            type="button"
+                            onClick={onCerrar}
+                            disabled={guardando}
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-400 transition-colors hover:text-white disabled:opacity-40 sm:ml-auto"
+                        >
+                            Cancelar
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={validarYGuardar}
+                            disabled={guardando || tiposActivos.length === 0}
+                            className="rounded-xl bg-violet-600 px-5 py-3 text-[10px] font-black uppercase tracking-wider text-white shadow-[0_0_20px_rgba(139,92,246,0.25)] transition-all hover:bg-violet-500 disabled:bg-slate-800 disabled:text-slate-600 disabled:shadow-none"
+                        >
+                            {guardando ? 'Guardando...' : 'Guardar variantes'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
 
 // Componente StatCard (Refactorizado para modo oscuro/neon)
 function StatCard({ label, val, color, textColor, onClick, isActive }: { label: string, val: number, color: string, textColor: string, onClick?: () => void, isActive?: boolean }) {
