@@ -21,11 +21,9 @@ type ResultadoSync = {
 };
 
 const INTERVALO_SYNC_MS = 60_000;
-const CLAVE_ULTIMO_SYNC = 'controlPedidos:lastFacturacionRemitosSync';
-const MARGEN_RELECTURA_MS = 5 * 60_000;
 
 const supabaseUrl = String(import.meta.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
-const supabaseAnonKey = String(import.meta.env.VITE_SUPABASE_ANON_KEY || '');
+const supabasePublishableKey = String(import.meta.env.VITE_SUPABASE_ANON_KEY || '');
 
 const idsVerificadosEnSesion = new Set<string>();
 let numerosExistentesEnFirebase: Set<string> | null = null;
@@ -76,9 +74,17 @@ const convertirRemitoFacturacionALegacy = (remito: RemitoFacturacion) => {
   const empresa = parseObjeto(remito.empresa);
   const items = parseArray(remito.items);
   const numeroRemito = String(remito.numero || '').trim();
+  const observaciones = String(remito.observaciones || '');
+
   const esTransporte = Boolean(
     remito.envioPorTransporte ||
+    observaciones.includes('[ENVÍO POR TRANSPORTE]') ||
     empresa.transporteNombre
+  );
+
+  const produccion = Boolean(
+    remito.requiereArmado ||
+    observaciones.includes('[REQUIERE ARMADO EN DEPÓSITO]')
   );
 
   return {
@@ -89,10 +95,12 @@ const convertirRemitoFacturacionALegacy = (remito: RemitoFacturacion) => {
     articulos: items.map((item: any) => ({
       codigo: String(item?.codigo || '').trim(),
       cantidad: Number(item?.cantidad || 0),
-      detalle: String(item?.detalle || '')
+      // Conservamos el campo legacy "detalle". Si el remito nuevo no lo trae,
+      // usamos su descripción para no perder información del artículo.
+      detalle: String(item?.detalle || item?.descripcion || '').trim()
     })).filter((item: any) => item.codigo && Number.isFinite(item.cantidad) && item.cantidad > 0),
-    aclaraciones: String(remito.observaciones || ''),
-    produccion: Boolean(remito.requiereArmado),
+    aclaraciones: observaciones,
+    produccion,
     prioridad: false,
     esTransporte,
     estado: null,
@@ -101,8 +109,7 @@ const convertirRemitoFacturacionALegacy = (remito: RemitoFacturacion) => {
     notificado: false,
     timestamp: remito.fechaCreacion || new Date().toISOString(),
 
-    // Metadatos adicionales. El sistema histórico ignora estos campos,
-    // pero nos permiten auditar y deduplicar la integración.
+    // Metadatos de trazabilidad. El sistema histórico ignora estos campos.
     origen: 'sistema_facturacion',
     remitoFacturacionId: remito.id,
     sincronizadoAutomaticamente: true,
@@ -130,65 +137,28 @@ const cargarNumerosExistentes = async (): Promise<Set<string>> => {
   return numeros;
 };
 
-const obtenerMarcaTemporal = (): string | null => {
-  try {
-    const guardada = localStorage.getItem(CLAVE_ULTIMO_SYNC);
-    if (!guardada) return null;
-
-    const fecha = new Date(guardada);
-    if (Number.isNaN(fecha.getTime())) return null;
-
-    return new Date(fecha.getTime() - MARGEN_RELECTURA_MS).toISOString();
-  } catch {
-    return null;
-  }
-};
-
-const guardarMarcaTemporal = (fecha?: string) => {
-  if (!fecha) return;
-  const parsed = new Date(fecha);
-  if (Number.isNaN(parsed.getTime())) return;
-
-  try {
-    localStorage.setItem(CLAVE_ULTIMO_SYNC, parsed.toISOString());
-  } catch {
-    // localStorage puede estar deshabilitado. La sincronización sigue funcionando.
-  }
-};
-
 const consultarPendientesFacturacion = async (): Promise<RemitoFacturacion[]> => {
-  if (!supabaseUrl || !supabaseAnonKey) {
+  if (!supabaseUrl || !supabasePublishableKey) {
     throw new Error('Faltan VITE_SUPABASE_URL y/o VITE_SUPABASE_ANON_KEY en Control de Pedidos.');
   }
 
-  const campos = [
-    'id',
-    'numero',
-    'fechaCreacion',
-    'estado',
-    'empresa',
-    'items',
-    'observaciones',
-    'requiereArmado',
-    'envioPorTransporte',
-    'cantidadBultos'
-  ].join(',');
-
+  // Se consultan TODOS los pendientes en cada pasada. La deduplicación se hace
+  // contra Firebase, por lo que no dependemos de fechas ni de localStorage.
   const params = new URLSearchParams();
-  params.set('select', campos);
+  params.set('select', '*');
   params.set('estado', 'eq.Pendiente');
   params.set('order', 'fechaCreacion.asc');
-  params.set('limit', '1000');
-
-  const desde = obtenerMarcaTemporal();
-  if (desde) params.set('fechaCreacion', `gte.${desde}`);
+  params.set('limit', '2000');
 
   const respuesta = await fetch(`${supabaseUrl}/rest/v1/remitos?${params.toString()}`, {
+    method: 'GET',
     headers: {
-      apikey: supabaseAnonKey,
-      Authorization: `Bearer ${supabaseAnonKey}`,
+      // Las nuevas claves sb_publishable_* son API keys, no JWT.
+      // Para REST se envían en el header apikey.
+      apikey: supabasePublishableKey,
       Accept: 'application/json'
-    }
+    },
+    cache: 'no-store'
   });
 
   if (!respuesta.ok) {
@@ -196,7 +166,8 @@ const consultarPendientesFacturacion = async (): Promise<RemitoFacturacion[]> =>
     throw new Error(`Supabase respondió ${respuesta.status}: ${detalle || respuesta.statusText}`);
   }
 
-  return await respuesta.json() as RemitoFacturacion[];
+  const data = await respuesta.json();
+  return Array.isArray(data) ? data as RemitoFacturacion[] : [];
 };
 
 const sincronizarUno = async (remito: RemitoFacturacion): Promise<'creado' | 'omitido'> => {
@@ -210,12 +181,13 @@ const sincronizarUno = async (remito: RemitoFacturacion): Promise<'creado' | 'om
 
   const numeros = await cargarNumerosExistentes();
 
-  // Compatibilidad con remitos que pudieron haberse cargado manualmente antes de esta integración.
+  // Compatibilidad con remitos que pudieron cargarse manualmente antes de esta integración.
   if (numeros.has(legacy.numeroRemito)) {
     idsVerificadosEnSesion.add(String(remito.id));
     return 'omitido';
   }
 
+  // ID determinístico: dos PCs sincronizando el mismo remito no lo duplican.
   const destino = ref(db_realtime, `remitos/${claveFirebaseDesdeId(remito.id)}`);
   const resultado = await runTransaction(
     destino,
@@ -233,17 +205,12 @@ export const sincronizarRemitosPendientesFacturacion = async (): Promise<Resulta
   const pendientes = await consultarPendientesFacturacion();
   let creados = 0;
   let omitidos = 0;
-  let ultimaFechaProcesada: string | undefined;
 
   for (const remito of pendientes) {
     const resultado = await sincronizarUno(remito);
     if (resultado === 'creado') creados += 1;
     else omitidos += 1;
-
-    if (remito.fechaCreacion) ultimaFechaProcesada = remito.fechaCreacion;
   }
-
-  if (ultimaFechaProcesada) guardarMarcaTemporal(ultimaFechaProcesada);
 
   return {
     consultados: pendientes.length,
@@ -263,10 +230,12 @@ export const iniciarSincronizacionRemitosFacturacion = (
     ejecutando = true;
 
     try {
+      console.log('🟨 Sync Facturación → Control: consultando remitos pendientes...');
       const resultado = await sincronizarRemitosPendientesFacturacion();
-      if (resultado.creados > 0) {
-        console.info(`✅ Sync Facturación → Control: ${resultado.creados} remito(s) nuevo(s).`);
-      }
+      console.log(
+        `🔄 Sync Facturación → Control: ${resultado.consultados} consultado(s), ` +
+        `${resultado.creados} creado(s), ${resultado.omitidos} omitido(s).`
+      );
     } catch (error) {
       console.error('❌ Error sincronizando remitos de Facturación:', error);
       onError?.(error);

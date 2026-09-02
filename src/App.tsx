@@ -15,6 +15,7 @@ import Pagos from './pages/Pagos';
 import Devoluciones from './pages/Devoluciones';
 import ControlStock from './pages/ControlStock';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { iniciarSincronizacionRemitosFacturacion } from './integrations/facturacionRemitosSync';
 
 const globalStyles = `
   .scrollbar-hide::-webkit-scrollbar {
@@ -77,6 +78,18 @@ const AppContent = () => {
     setPaginaActual(pagina);
     setMenuMovilAbierto(false);
   };
+
+  // Sincroniza automáticamente los remitos pendientes del sistema de facturación
+  // con la estructura histórica que consume Control de Pedidos.
+  useEffect(() => {
+    if (!user) return;
+
+    console.log('🟦 Sync Facturación → Control: integración iniciada');
+
+    return iniciarSincronizacionRemitosFacturacion((error) => {
+      console.error('🟥 Sync Facturación → Control: fallo de sincronización', error);
+    });
+  }, [user]);
 
   useEffect(() => {
     if (role !== 'admin') return;
