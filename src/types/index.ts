@@ -15,6 +15,12 @@ export interface Remito {
   esTransporte?: boolean;
   timestamp?: string;
   fechaEntrega?: string; // <-- Agregado para historial
+
+  // Metadatos opcionales de la integración automática con el facturador.
+  origen?: string;
+  remitoFacturacionId?: string;
+  sincronizadoAutomaticamente?: boolean;
+  cantidadBultos?: number;
   
   articulos?: {
     codigo: string;
