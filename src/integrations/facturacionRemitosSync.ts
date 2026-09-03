@@ -19,6 +19,8 @@ type ResultadoSync = {
   creados: number;
   omitidos: number;
   variantesCreadas: number;
+  entregasSincronizadas: number;
+  entregasOmitidas: number;
   errores: number;
 };
 
@@ -97,6 +99,157 @@ const claveFirebaseDesdeId = (id: string): string =>
   `facturacion_${String(id).replace(/[.#$\[\]/]/g, '_')}`;
 
 const textoLimpio = (valor: unknown): string => String(valor || '').trim();
+
+
+const normalizarFirmaDataUrl = (valor: unknown): string => {
+  const firma = textoLimpio(valor);
+  if (!firma) return '';
+  if (firma.startsWith('data:image/')) return firma;
+  return `data:image/png;base64,${firma}`;
+};
+
+const fingerprintConstanciaEntrega = (data: Record<string, any>): string => {
+  const firma = parseObjeto(data.clienteFirma);
+  const cantidades = parseObjeto(data.cantidadesEntregadas);
+  const noRecibidos = parseObjeto(data.noRecibidos);
+
+  return [
+    textoLimpio(data.estado),
+    textoLimpio(data.fechaEntrega),
+    textoLimpio(data.chofer),
+    textoLimpio(data.responsable),
+    textoLimpio(firma.tipo),
+    textoLimpio(firma.nombre),
+    textoLimpio(firma.dni),
+    textoLimpio(firma.firma).length,
+    JSON.stringify(cantidades),
+    JSON.stringify(noRecibidos)
+  ].join('|');
+};
+
+const construirConstanciaEntrega = (
+  firebaseKey: string,
+  data: Record<string, any>
+): Record<string, any> | null => {
+  const remitoFacturacionId = textoLimpio(data.remitoFacturacionId);
+  if (!remitoFacturacionId) return null;
+
+  const firma = parseObjeto(data.clienteFirma);
+  const fechaEntrega = textoLimpio(data.fechaEntrega);
+  const estado = textoLimpio(data.estado);
+  const tieneRecepcion = Boolean(
+    estado.toLowerCase() === 'entregado' ||
+    fechaEntrega ||
+    firma.firma ||
+    firma.nombre ||
+    firma.dni ||
+    firma.tipo
+  );
+
+  if (!tieneRecepcion) return null;
+
+  const firmaDataUrl = normalizarFirmaDataUrl(firma.firma);
+  const tipo = textoLimpio(firma.tipo) || (firmaDataUrl ? 'Cliente' : 'Entrega');
+
+  return {
+    recibido: true,
+    tipo,
+    fechaEntrega: fechaEntrega || null,
+    nombre: textoLimpio(firma.nombre) || null,
+    dni: textoLimpio(firma.dni) || null,
+    firma: firmaDataUrl || null,
+    chofer: textoLimpio(data.chofer) || null,
+    responsable: textoLimpio(data.responsable) || null,
+    cantidadesEntregadas: parseObjeto(data.cantidadesEntregadas),
+    noRecibidos: parseObjeto(data.noRecibidos),
+    remitoControlId: firebaseKey,
+    sincronizadoDesdeControlEn: new Date().toISOString()
+  };
+};
+
+const actualizarConstanciaEnSupabase = async (
+  remitoFacturacionId: string,
+  constanciaEntrega: Record<string, any>
+): Promise<void> => {
+  if (!supabaseUrl || !supabasePublishableKey) {
+    throw new Error('Faltan VITE_SUPABASE_URL y/o VITE_SUPABASE_ANON_KEY en Control de Pedidos.');
+  }
+
+  const params = new URLSearchParams();
+  params.set('id', `eq.${remitoFacturacionId}`);
+
+  const respuesta = await fetch(`${supabaseUrl}/rest/v1/remitos?${params.toString()}`, {
+    method: 'PATCH',
+    headers: {
+      apikey: supabasePublishableKey,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal'
+    },
+    body: JSON.stringify({
+      estado: 'Entregado',
+      constanciaEntrega
+    })
+  });
+
+  if (!respuesta.ok) {
+    const detalle = await respuesta.text().catch(() => '');
+    throw new Error(`Supabase respondió ${respuesta.status} actualizando constancia: ${detalle || respuesta.statusText}`);
+  }
+};
+
+const sincronizarConstanciasEntregaHaciaFacturacion = async (): Promise<{
+  sincronizadas: number;
+  omitidas: number;
+  errores: number;
+}> => {
+  const snapshot = await get(ref(db_realtime, 'remitos'));
+  const data = snapshot.val() || {};
+
+  let sincronizadas = 0;
+  let omitidas = 0;
+  let errores = 0;
+
+  for (const [firebaseKey, valor] of Object.entries(data)) {
+    const remitoData = (valor || {}) as Record<string, any>;
+    const remitoFacturacionId = textoLimpio(remitoData.remitoFacturacionId);
+    if (!remitoFacturacionId || textoLimpio(remitoData.origen) !== 'sistema_facturacion') continue;
+
+    const constancia = construirConstanciaEntrega(firebaseKey, remitoData);
+    if (!constancia) continue;
+
+    const fingerprint = fingerprintConstanciaEntrega(remitoData);
+    const syncAnterior = parseObjeto(remitoData.constanciaEntregaSyncFacturacion);
+    if (textoLimpio(syncAnterior.fingerprint) === fingerprint) {
+      omitidas += 1;
+      continue;
+    }
+
+    try {
+      await actualizarConstanciaEnSupabase(remitoFacturacionId, constancia);
+
+      await runTransaction(
+        ref(db_realtime, `remitos/${firebaseKey}/constanciaEntregaSyncFacturacion`),
+        () => ({
+          fingerprint,
+          sincronizadoEn: new Date().toISOString(),
+          remitoFacturacionId
+        }),
+        { applyLocally: false }
+      );
+
+      sincronizadas += 1;
+    } catch (error) {
+      errores += 1;
+      console.error(
+        `❌ Error sincronizando constancia de entrega ${textoLimpio(remitoData.numeroRemito) || firebaseKey} hacia Facturación:`,
+        error
+      );
+    }
+  }
+
+  return { sincronizadas, omitidas, errores };
+};
 
 const parsearDetalleVarianteTexto = (texto: unknown): any[] => {
   const origen = textoLimpio(texto);
@@ -477,12 +630,16 @@ export const sincronizarRemitosPendientesFacturacion = async (): Promise<Resulta
     }
   }
 
+  const entregas = await sincronizarConstanciasEntregaHaciaFacturacion();
+
   return {
     consultados: pendientes.length,
     creados,
     omitidos,
     variantesCreadas,
-    errores
+    entregasSincronizadas: entregas.sincronizadas,
+    entregasOmitidas: entregas.omitidas,
+    errores: errores + entregas.errores
   };
 };
 
@@ -502,6 +659,8 @@ export const iniciarSincronizacionRemitosFacturacion = (
         `🔄 Sync Facturación → Control: ${resultado.consultados} consultado(s), ` +
         `${resultado.creados} remito(s) creado(s), ${resultado.omitidos} existente(s), ` +
         `${resultado.variantesCreadas} configuración(es) de variantes creada(s), ` +
+        `${resultado.entregasSincronizadas} constancia(s) de entrega copiada(s) a Facturación, ` +
+        `${resultado.entregasOmitidas} constancia(s) ya sincronizada(s), ` +
         `${resultado.errores} error(es).`
       );
     } catch (error) {
