@@ -18,6 +18,33 @@ type ResultadoSync = {
   consultados: number;
   creados: number;
   omitidos: number;
+  variantesCreadas: number;
+  errores: number;
+};
+
+type RegistroRemitoFirebase = {
+  key: string;
+  data: Record<string, any>;
+};
+
+type CombinacionVarianteLegacy = {
+  cantidad: number;
+  talle?: string;
+  color?: string;
+  modelo?: string;
+};
+
+type ConfiguracionVariantesLegacy = {
+  articuloIndex: number;
+  codigo: string;
+  cantidadArticulo: number;
+  combinaciones: CombinacionVarianteLegacy[];
+  tipos: {
+    talle: boolean;
+    color: boolean;
+    modelo: boolean;
+  };
+  actualizadoEn: string;
 };
 
 const INTERVALO_SYNC_MS = 60_000;
@@ -25,8 +52,7 @@ const INTERVALO_SYNC_MS = 60_000;
 const supabaseUrl = String(import.meta.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
 const supabasePublishableKey = String(import.meta.env.VITE_SUPABASE_ANON_KEY || '');
 
-const idsVerificadosEnSesion = new Set<string>();
-let numerosExistentesEnFirebase: Set<string> | null = null;
+let remitosPorNumero: Map<string, RegistroRemitoFirebase> | null = null;
 
 const parseObjeto = (valor: unknown): Record<string, any> => {
   if (!valor) return {};
@@ -70,10 +96,196 @@ const normalizarTelefono = (valor: unknown): string => String(valor || '').repla
 const claveFirebaseDesdeId = (id: string): string =>
   `facturacion_${String(id).replace(/[.#$\[\]/]/g, '_')}`;
 
+const textoLimpio = (valor: unknown): string => String(valor || '').trim();
+
+const parsearDetalleVarianteTexto = (texto: unknown): any[] => {
+  const origen = textoLimpio(texto);
+  if (!origen) return [];
+
+  return origen
+    .split(/\s*\|\s*|\s*\n\s*/)
+    .map(parte => parte.replace(/^↳\s*/, '').trim())
+    .filter(Boolean)
+    .map(parte => {
+      const matchCantidad = parte.match(/^(\d+(?:[.,]\d+)?)\s*x\s*(.*)$/i);
+      if (!matchCantidad) return null;
+
+      const cantidad = Number(matchCantidad[1].replace(',', '.'));
+      const detalle = matchCantidad[2].trim();
+      if (!Number.isInteger(cantidad) || cantidad <= 0 || !detalle) return null;
+
+      const leerCampo = (nombres: string[]): string => {
+        const patron = nombres.join('|');
+        const regex = new RegExp(
+          `(?:^|[·;,]\\s*)(${patron})\\s*:\\s*([^·;,|]+)`,
+          'i'
+        );
+        return textoLimpio(detalle.match(regex)?.[2]);
+      };
+
+      const talle = leerCampo(['Talle']);
+      const color = leerCampo(['Color']);
+      const modelo = leerCampo(['Diseño', 'Diseno', 'Modelo']);
+
+      if (!talle && !color && !modelo) return null;
+      return { cantidad, talle, color, modelo };
+    })
+    .filter(Boolean);
+};
+
+const completarVarianteDesdeTexto = (variante: any): any => {
+  const talleActual = textoLimpio(variante?.talle);
+  const colorActual = textoLimpio(variante?.color);
+  const modeloActual = textoLimpio(
+    variante?.modelo ?? variante?.diseno ?? variante?.diseño
+  );
+
+  if (talleActual || colorActual || modeloActual) return variante;
+
+  const desdeTexto = parsearDetalleVarianteTexto(
+    `${Number(variante?.cantidad || 0)} x ${textoLimpio(variante?.texto)}`
+  )[0];
+
+  return desdeTexto ? { ...variante, ...desdeTexto } : variante;
+};
+
+const obtenerVariantesItem = (item: any): any[] => {
+  const fuentesMultiples = [
+    item?.variantesDetalle,
+    item?.detalleVariantes,
+    item?.variantesSeleccionadas
+  ];
+
+  for (const fuente of fuentesMultiples) {
+    const multiples = parseArray(fuente).map(completarVarianteDesdeTexto);
+    if (multiples.length > 0) return multiples;
+  }
+
+  // Compatibilidad con comprobantes generados con la versión anterior,
+  // que guardaban una única variante en item.variante.
+  const varianteUnica = parseObjeto(item?.variante);
+  if (
+    varianteUnica &&
+    Object.keys(varianteUnica).length > 0 &&
+    Number(item?.cantidad || 0) > 0
+  ) {
+    return [completarVarianteDesdeTexto({
+      ...varianteUnica,
+      cantidad: Number(item.cantidad)
+    })];
+  }
+
+  // Fallback para remitos que ya contienen el detalle impreso pero por alguna
+  // versión intermedia no conservaron el array estructurado. Ejemplo:
+  // "1 x Color: NEGRO" o "2 x Talle: S | 3 x Talle: M".
+  const desdeTexto = parsearDetalleVarianteTexto(
+    item?.detalleVariantesTexto || item?.varianteTexto
+  );
+  if (desdeTexto.length > 0) return desdeTexto;
+
+  return [];
+};
+
+const convertirVariantesItemAEstructuraControl = (
+  item: any,
+  articuloIndex: number
+): ConfiguracionVariantesLegacy | null => {
+  const variantesOrigen = obtenerVariantesItem(item);
+  if (variantesOrigen.length === 0) return null;
+
+  const combinaciones: CombinacionVarianteLegacy[] = variantesOrigen
+    .map((variante: any) => {
+      const cantidad = Number(variante?.cantidad || 0);
+      let talle = textoLimpio(variante?.talle);
+      let color = textoLimpio(variante?.color);
+      // En Facturación lo llamamos "Diseño". El Control de Pedidos históricamente
+      // lo guarda como "modelo", por lo que se traduce a ese nombre.
+      let modelo = textoLimpio(
+        variante?.modelo ?? variante?.diseno ?? variante?.diseño
+      );
+
+      if (!talle && !color && !modelo && variante?.texto) {
+        const desdeTexto = parsearDetalleVarianteTexto(
+          `${cantidad} x ${textoLimpio(variante.texto)}`
+        )[0];
+        talle = textoLimpio(desdeTexto?.talle);
+        color = textoLimpio(desdeTexto?.color);
+        modelo = textoLimpio(desdeTexto?.modelo);
+      }
+
+      const resultado: CombinacionVarianteLegacy = { cantidad };
+      if (talle) resultado.talle = talle;
+      if (color) resultado.color = color;
+      if (modelo) resultado.modelo = modelo;
+      return resultado;
+    })
+    .filter(combinacion =>
+      Number.isInteger(combinacion.cantidad) &&
+      combinacion.cantidad > 0 &&
+      Boolean(combinacion.talle || combinacion.color || combinacion.modelo)
+    );
+
+  if (combinaciones.length === 0) return null;
+
+  const cantidadArticulo = Number(item?.cantidad || 0);
+  const totalVariantes = combinaciones.reduce(
+    (total, combinacion) => total + combinacion.cantidad,
+    0
+  );
+
+  // ControlDeRemitos exige que la suma de combinaciones coincida exactamente
+  // con la cantidad total del artículo. No escribimos una estructura inválida.
+  if (totalVariantes !== cantidadArticulo) {
+    throw new Error(
+      `Las variantes de ${textoLimpio(item?.codigo) || 'un artículo'} suman ` +
+      `${totalVariantes}, pero el artículo tiene cantidad ${cantidadArticulo}.`
+    );
+  }
+
+  return {
+    articuloIndex,
+    codigo: textoLimpio(item?.codigo),
+    cantidadArticulo,
+    combinaciones,
+    tipos: {
+      talle: combinaciones.some(combinacion => Boolean(combinacion.talle)),
+      color: combinaciones.some(combinacion => Boolean(combinacion.color)),
+      modelo: combinaciones.some(combinacion => Boolean(combinacion.modelo))
+    },
+    actualizadoEn: new Date().toISOString()
+  };
+};
+
+const convertirVariantesRemito = (
+  remito: RemitoFacturacion
+): Record<string, ConfiguracionVariantesLegacy> => {
+  const items = parseArray(remito.items);
+  const resultado: Record<string, ConfiguracionVariantesLegacy> = {};
+
+  items.forEach((item: any, articuloIndex: number) => {
+    try {
+      const configuracion = convertirVariantesItemAEstructuraControl(item, articuloIndex);
+      if (configuracion) {
+        resultado[`item_${articuloIndex}`] = configuracion;
+      }
+    } catch (error) {
+      // Una variante defectuosa no debe impedir que el resto de los artículos
+      // ni los remitos siguientes se sincronicen.
+      console.warn(
+        `⚠️ No se pudo convertir variantes del remito ${textoLimpio(remito.numero)} ` +
+        `item_${articuloIndex} (${textoLimpio(item?.codigo)}):`,
+        error
+      );
+    }
+  });
+
+  return resultado;
+};
+
 const convertirRemitoFacturacionALegacy = (remito: RemitoFacturacion) => {
   const empresa = parseObjeto(remito.empresa);
   const items = parseArray(remito.items);
-  const numeroRemito = String(remito.numero || '').trim();
+  const numeroRemito = textoLimpio(remito.numero);
   const observaciones = String(remito.observaciones || '');
 
   const esTransporte = Boolean(
@@ -92,13 +304,18 @@ const convertirRemitoFacturacionALegacy = (remito: RemitoFacturacion) => {
     fechaEmision: formatearFecha(remito.fechaCreacion),
     cliente: String(empresa.razonSocial || 'Sin nombre'),
     telefono: normalizarTelefono(empresa.telefonoCelular || empresa.telefonoFijo || ''),
+
+    // La estructura histórica de /remitos conserva UN artículo por producto.
+    // Las variantes NO se incrustan aquí: se guardan por separado en
+    // /variantesRemitos/{remitoId}/item_N.
     articulos: items.map((item: any) => ({
-      codigo: String(item?.codigo || '').trim(),
+      codigo: textoLimpio(item?.codigo),
       cantidad: Number(item?.cantidad || 0),
-      // Conservamos el campo legacy "detalle". Si el remito nuevo no lo trae,
-      // usamos su descripción para no perder información del artículo.
-      detalle: String(item?.detalle || item?.descripcion || '').trim()
-    })).filter((item: any) => item.codigo && Number.isFinite(item.cantidad) && item.cantidad > 0),
+      detalle: textoLimpio(item?.detalle || item?.descripcion || '')
+    })).filter((item: any) =>
+      item.codigo && Number.isFinite(item.cantidad) && item.cantidad > 0
+    ),
+
     aclaraciones: observaciones,
     produccion,
     prioridad: false,
@@ -117,24 +334,19 @@ const convertirRemitoFacturacionALegacy = (remito: RemitoFacturacion) => {
   };
 };
 
-const cargarNumerosExistentes = async (): Promise<Set<string>> => {
-  if (numerosExistentesEnFirebase) return numerosExistentesEnFirebase;
-
+const cargarIndiceRemitos = async (): Promise<Map<string, RegistroRemitoFirebase>> => {
   const snapshot = await get(ref(db_realtime, 'remitos'));
   const data = snapshot.val() || {};
-  const numeros = new Set<string>();
+  const indice = new Map<string, RegistroRemitoFirebase>();
 
-  Object.values(data).forEach((remito: any) => {
-    if (remito?.numeroRemito !== undefined && remito?.numeroRemito !== null) {
-      numeros.add(String(remito.numeroRemito).trim());
-    }
-    if (remito?.remitoFacturacionId) {
-      idsVerificadosEnSesion.add(String(remito.remitoFacturacionId));
-    }
+  Object.entries(data).forEach(([key, remito]) => {
+    const remitoData = (remito || {}) as Record<string, any>;
+    const numero = textoLimpio(remitoData.numeroRemito);
+    if (numero) indice.set(numero, { key, data: remitoData });
   });
 
-  numerosExistentesEnFirebase = numeros;
-  return numeros;
+  remitosPorNumero = indice;
+  return indice;
 };
 
 const consultarPendientesFacturacion = async (): Promise<RemitoFacturacion[]> => {
@@ -142,8 +354,6 @@ const consultarPendientesFacturacion = async (): Promise<RemitoFacturacion[]> =>
     throw new Error('Faltan VITE_SUPABASE_URL y/o VITE_SUPABASE_ANON_KEY en Control de Pedidos.');
   }
 
-  // Se consultan TODOS los pendientes en cada pasada. La deduplicación se hace
-  // contra Firebase, por lo que no dependemos de fechas ni de localStorage.
   const params = new URLSearchParams();
   params.set('select', '*');
   params.set('estado', 'eq.Pendiente');
@@ -153,8 +363,6 @@ const consultarPendientesFacturacion = async (): Promise<RemitoFacturacion[]> =>
   const respuesta = await fetch(`${supabaseUrl}/rest/v1/remitos?${params.toString()}`, {
     method: 'GET',
     headers: {
-      // Las nuevas claves sb_publishable_* son API keys, no JWT.
-      // Para REST se envían en el header apikey.
       apikey: supabasePublishableKey,
       Accept: 'application/json'
     },
@@ -170,52 +378,111 @@ const consultarPendientesFacturacion = async (): Promise<RemitoFacturacion[]> =>
   return Array.isArray(data) ? data as RemitoFacturacion[] : [];
 };
 
-const sincronizarUno = async (remito: RemitoFacturacion): Promise<'creado' | 'omitido'> => {
-  if (!remito?.id || idsVerificadosEnSesion.has(String(remito.id))) return 'omitido';
+const sincronizarVariantesRemito = async (
+  remitoFirebaseKey: string,
+  remito: RemitoFacturacion
+): Promise<number> => {
+  const configuraciones = convertirVariantesRemito(remito);
+  let creadas = 0;
+
+  for (const [itemKey, configuracion] of Object.entries(configuraciones)) {
+    const destino = ref(
+      db_realtime,
+      `variantesRemitos/${remitoFirebaseKey}/${itemKey}`
+    );
+
+    // Crear sólo si todavía no existe. De esta manera una configuración que
+    // haya sido revisada/editada posteriormente en Control de Pedidos no se
+    // pisa cada 60 segundos por la sincronización automática.
+    const resultado = await runTransaction(
+      destino,
+      actual => actual == null ? configuracion : undefined,
+      { applyLocally: false }
+    );
+
+    if (resultado.committed) creadas += 1;
+  }
+
+  return creadas;
+};
+
+const sincronizarUno = async (
+  remito: RemitoFacturacion
+): Promise<{ creado: boolean; variantesCreadas: number }> => {
+  if (!remito?.id) return { creado: false, variantesCreadas: 0 };
 
   const legacy = convertirRemitoFacturacionALegacy(remito);
-  if (!legacy.numeroRemito) {
-    idsVerificadosEnSesion.add(String(remito.id));
-    return 'omitido';
+  if (!legacy.numeroRemito) return { creado: false, variantesCreadas: 0 };
+
+  const indice = await cargarIndiceRemitos();
+  const existente = indice.get(legacy.numeroRemito);
+  const remitoFirebaseKey = existente?.key || claveFirebaseDesdeId(remito.id);
+
+  let creado = false;
+
+  if (!existente) {
+    const destino = ref(db_realtime, `remitos/${remitoFirebaseKey}`);
+    const resultado = await runTransaction(
+      destino,
+      actual => actual == null ? legacy : undefined,
+      { applyLocally: false }
+    );
+
+    creado = resultado.committed;
+
+    // Aunque otra PC haya ganado la transacción, el ID determinístico es el
+    // mismo y podemos asociar las variantes al remito correcto.
+    indice.set(legacy.numeroRemito, {
+      key: remitoFirebaseKey,
+      data: legacy
+    });
   }
 
-  const numeros = await cargarNumerosExistentes();
-
-  // Compatibilidad con remitos que pudieron cargarse manualmente antes de esta integración.
-  if (numeros.has(legacy.numeroRemito)) {
-    idsVerificadosEnSesion.add(String(remito.id));
-    return 'omitido';
-  }
-
-  // ID determinístico: dos PCs sincronizando el mismo remito no lo duplican.
-  const destino = ref(db_realtime, `remitos/${claveFirebaseDesdeId(remito.id)}`);
-  const resultado = await runTransaction(
-    destino,
-    actual => actual == null ? legacy : undefined,
-    { applyLocally: false }
+  // Esto también se ejecuta para remitos que ya habían sido sincronizados con
+  // una versión anterior. Así se pueden completar automáticamente sus nodos
+  // /variantesRemitos sin duplicar el remito ni tocar su estado logístico.
+  const variantesCreadas = await sincronizarVariantesRemito(
+    remitoFirebaseKey,
+    remito
   );
 
-  idsVerificadosEnSesion.add(String(remito.id));
-  numeros.add(legacy.numeroRemito);
-
-  return resultado.committed ? 'creado' : 'omitido';
+  return { creado, variantesCreadas };
 };
 
 export const sincronizarRemitosPendientesFacturacion = async (): Promise<ResultadoSync> => {
   const pendientes = await consultarPendientesFacturacion();
   let creados = 0;
   let omitidos = 0;
+  let variantesCreadas = 0;
+  let errores = 0;
+
+  // Refrescamos el índice en cada pasada. El Control puede editar/agregar datos
+  // mientras la app permanece abierta y no queremos depender de un cache viejo.
+  remitosPorNumero = null;
 
   for (const remito of pendientes) {
-    const resultado = await sincronizarUno(remito);
-    if (resultado === 'creado') creados += 1;
-    else omitidos += 1;
+    try {
+      const resultado = await sincronizarUno(remito);
+      if (resultado.creado) creados += 1;
+      else omitidos += 1;
+      variantesCreadas += resultado.variantesCreadas;
+    } catch (error) {
+      errores += 1;
+      console.error(
+        `❌ Error sincronizando remito ${textoLimpio(remito.numero) || remito.id}:`,
+        error
+      );
+      // Continuamos con el siguiente remito. Un registro problemático no puede
+      // bloquear todos los pedidos pendientes posteriores.
+    }
   }
 
   return {
     consultados: pendientes.length,
     creados,
-    omitidos
+    omitidos,
+    variantesCreadas,
+    errores
   };
 };
 
@@ -230,11 +497,12 @@ export const iniciarSincronizacionRemitosFacturacion = (
     ejecutando = true;
 
     try {
-      console.log('🟨 Sync Facturación → Control: consultando remitos pendientes...');
       const resultado = await sincronizarRemitosPendientesFacturacion();
-      console.log(
+      console.info(
         `🔄 Sync Facturación → Control: ${resultado.consultados} consultado(s), ` +
-        `${resultado.creados} creado(s), ${resultado.omitidos} omitido(s).`
+        `${resultado.creados} remito(s) creado(s), ${resultado.omitidos} existente(s), ` +
+        `${resultado.variantesCreadas} configuración(es) de variantes creada(s), ` +
+        `${resultado.errores} error(es).`
       );
     } catch (error) {
       console.error('❌ Error sincronizando remitos de Facturación:', error);
