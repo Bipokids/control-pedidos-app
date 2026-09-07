@@ -14,6 +14,19 @@ type RemitoFacturacion = {
   cantidadBultos?: number;
 };
 
+
+type SoporteFacturacion = {
+  id: string;
+  numero?: string;
+  fechaIngreso?: string;
+  cliente?: unknown;
+  items?: unknown;
+  estado?: string;
+  chofer?: string;
+  observaciones?: string;
+  historialEstados?: unknown;
+};
+
 type ResultadoSync = {
   consultados: number;
   creados: number;
@@ -21,10 +34,21 @@ type ResultadoSync = {
   variantesCreadas: number;
   entregasSincronizadas: number;
   entregasOmitidas: number;
+  soportesConsultados: number;
+  soportesCreados: number;
+  soportesVinculados: number;
+  soportesOmitidos: number;
+  soportesEstadosSincronizados: number;
+  soportesEstadosOmitidos: number;
   errores: number;
 };
 
 type RegistroRemitoFirebase = {
+  key: string;
+  data: Record<string, any>;
+};
+
+type RegistroSoporteFirebase = {
   key: string;
   data: Record<string, any>;
 };
@@ -55,6 +79,7 @@ const supabaseUrl = String(import.meta.env.VITE_SUPABASE_URL || '').replace(/\/$
 const supabasePublishableKey = String(import.meta.env.VITE_SUPABASE_ANON_KEY || '');
 
 let remitosPorNumero: Map<string, RegistroRemitoFirebase> | null = null;
+let soportesPorNumero: Map<string, RegistroSoporteFirebase> | null = null;
 
 const parseObjeto = (valor: unknown): Record<string, any> => {
   if (!valor) return {};
@@ -98,7 +123,19 @@ const normalizarTelefono = (valor: unknown): string => String(valor || '').repla
 const claveFirebaseDesdeId = (id: string): string =>
   `facturacion_${String(id).replace(/[.#$\[\]/]/g, '_')}`;
 
+const claveFirebaseSoporteDesdeId = (id: string): string =>
+  `facturacion_soporte_${String(id).replace(/[.#$\[\]/]/g, '_')}`;
+
 const textoLimpio = (valor: unknown): string => String(valor || '').trim();
+
+const formatearFechaISO = (valor?: string): string => {
+  const fecha = valor ? new Date(valor) : new Date();
+  if (Number.isNaN(fecha.getTime())) return textoLimpio(valor);
+  const anio = fecha.getFullYear();
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+  const dia = String(fecha.getDate()).padStart(2, '0');
+  return `${anio}-${mes}-${dia}`;
+};
 
 
 const normalizarFirmaDataUrl = (valor: unknown): string => {
@@ -602,6 +639,347 @@ const sincronizarUno = async (
   return { creado, variantesCreadas };
 };
 
+
+// -----------------------------------------------------------------------------
+// SOPORTES: ERP / Supabase -> estructura histórica de Firebase
+// -----------------------------------------------------------------------------
+
+const mapearEstadoSoporteALegacy = (estado: unknown): string => {
+  const normalizado = textoLimpio(estado).toLowerCase();
+
+  if (normalizado === 'entregado') return 'Entregado';
+  if (normalizado === 'reparado / listo' || normalizado === 'resuelto') return 'Resuelto';
+
+  // La Gestión de Soportes histórica sólo distingue Pendiente / Resuelto / Entregado.
+  // Los estados internos del ERP (revisión, espera de repuestos, nota de crédito, etc.)
+  // siguen apareciendo como Pendiente hasta que el equipo esté listo.
+  return 'Pendiente';
+};
+
+const convertirItemSoporteAProductoLegacy = (item: any): string => {
+  const codigo = textoLimpio(item?.codigo);
+  const descripcion = textoLimpio(item?.descripcion);
+  const color = textoLimpio(item?.color);
+  const falla = textoLimpio(item?.falla);
+
+  const identificacion = codigo || descripcion || 'EQUIPO';
+  const colorUtil = color && color.toLowerCase() !== 'no especificado' ? color : '';
+  const izquierda = [identificacion, colorUtil].filter(Boolean).join(' ');
+
+  return falla ? `${izquierda} - ${falla}` : izquierda;
+};
+
+const convertirSoporteFacturacionALegacy = (soporte: SoporteFacturacion) => {
+  const cliente = parseObjeto(soporte.cliente);
+  const items = parseArray(soporte.items);
+  const productos = items
+    .map(convertirItemSoporteAProductoLegacy)
+    .map(textoLimpio)
+    .filter(Boolean);
+
+  const observaciones = textoLimpio(soporte.observaciones);
+
+  return {
+    cliente: textoLimpio(cliente.razonSocial) || 'Sin nombre',
+    estado: mapearEstadoSoporteALegacy(soporte.estado),
+    fechaSoporte: formatearFechaISO(soporte.fechaIngreso),
+    numeroSoporte: textoLimpio(soporte.numero),
+    productos,
+    rangoEntrega: '',
+    telefono: normalizarTelefono(cliente.telefono || cliente.telefonoCelular || cliente.telefonoFijo || ''),
+    notificado: false,
+    timestamp: soporte.fechaIngreso || new Date().toISOString(),
+    chofer: textoLimpio(soporte.chofer),
+    observaciones,
+    aclaraciones: observaciones,
+
+    // Trazabilidad. La Gestión histórica ignora estos campos.
+    origen: 'sistema_facturacion',
+    soporteFacturacionId: soporte.id,
+    sincronizadoAutomaticamente: true,
+    estadoFacturacion: textoLimpio(soporte.estado),
+    itemsFacturacion: items
+  };
+};
+
+const cargarIndiceSoportes = async (): Promise<Map<string, RegistroSoporteFirebase>> => {
+  const snapshot = await get(ref(db_realtime, 'soportes'));
+  const data = snapshot.val() || {};
+  const indice = new Map<string, RegistroSoporteFirebase>();
+
+  Object.entries(data).forEach(([key, soporte]) => {
+    const soporteData = (soporte || {}) as Record<string, any>;
+    const numero = textoLimpio(soporteData.numeroSoporte);
+    if (numero) indice.set(numero, { key, data: soporteData });
+  });
+
+  soportesPorNumero = indice;
+  return indice;
+};
+
+const consultarSoportesFacturacion = async (): Promise<SoporteFacturacion[]> => {
+  if (!supabaseUrl || !supabasePublishableKey) {
+    throw new Error('Faltan VITE_SUPABASE_URL y/o VITE_SUPABASE_ANON_KEY en Control de Pedidos.');
+  }
+
+  const params = new URLSearchParams();
+  params.set('select', '*');
+  params.set('order', 'fechaIngreso.asc');
+  params.set('limit', '2000');
+
+  const respuesta = await fetch(`${supabaseUrl}/rest/v1/soporte?${params.toString()}`, {
+    method: 'GET',
+    headers: {
+      apikey: supabasePublishableKey,
+      Accept: 'application/json'
+    },
+    cache: 'no-store'
+  });
+
+  if (!respuesta.ok) {
+    const detalle = await respuesta.text().catch(() => '');
+    throw new Error(`Supabase respondió ${respuesta.status} consultando soportes: ${detalle || respuesta.statusText}`);
+  }
+
+  const data = await respuesta.json();
+  return Array.isArray(data) ? data as SoporteFacturacion[] : [];
+};
+
+const resolverEstadoSoporteFirebase = (estadoActual: unknown, estadoERP: unknown): string => {
+  const actual = textoLimpio(estadoActual).toLowerCase();
+  const nuevo = textoLimpio(estadoERP).toLowerCase();
+
+  // No retrocedemos un soporte que ya fue entregado desde la Gestión de Despachos.
+  if (actual === 'entregado' || nuevo === 'entregado') return 'Entregado';
+
+  // Tampoco retrocedemos un soporte que ya fue marcado como resuelto/listo.
+  if (actual === 'resuelto' || nuevo === 'resuelto') return 'Resuelto';
+
+  return 'Pendiente';
+};
+
+const sincronizarUnSoporte = async (
+  soporte: SoporteFacturacion
+): Promise<{ creado: boolean; vinculado: boolean; omitido: boolean }> => {
+  if (!soporte?.id) return { creado: false, vinculado: false, omitido: true };
+
+  const legacy = convertirSoporteFacturacionALegacy(soporte);
+  if (!legacy.numeroSoporte || legacy.productos.length === 0) {
+    return { creado: false, vinculado: false, omitido: true };
+  }
+
+  const indice = soportesPorNumero || await cargarIndiceSoportes();
+  const existente = indice.get(legacy.numeroSoporte);
+  const firebaseKey = existente?.key || claveFirebaseSoporteDesdeId(soporte.id);
+
+  // Si ya existe un número vinculado a OTRO soporte del ERP, no lo tocamos.
+  if (
+    existente &&
+    textoLimpio(existente.data.soporteFacturacionId) &&
+    textoLimpio(existente.data.soporteFacturacionId) !== soporte.id
+  ) {
+    console.warn(
+      `⚠️ Soporte #${legacy.numeroSoporte}: el número ya está vinculado a otro registro de Facturación.`
+    );
+    return { creado: false, vinculado: false, omitido: true };
+  }
+
+  const destino = ref(db_realtime, `soportes/${firebaseKey}`);
+  const resultado = await runTransaction(
+    destino,
+    actual => {
+      if (actual == null) return legacy;
+
+      const actualObj = (actual || {}) as Record<string, any>;
+      const estadoFinal = resolverEstadoSoporteFirebase(actualObj.estado, legacy.estado);
+
+      // Actualizamos datos descriptivos provenientes del ERP, pero preservamos
+      // toda la información operativa que pertenece a Gestión de Soportes:
+      // rangoEntrega, notificado, firma, entrega, responsable, etc.
+      return {
+        ...actualObj,
+        cliente: legacy.cliente,
+        fechaSoporte: legacy.fechaSoporte,
+        numeroSoporte: legacy.numeroSoporte,
+        productos: legacy.productos,
+        telefono: legacy.telefono,
+        observaciones: legacy.observaciones,
+        aclaraciones: legacy.aclaraciones,
+        timestamp: legacy.timestamp,
+        origen: legacy.origen,
+        soporteFacturacionId: legacy.soporteFacturacionId,
+        sincronizadoAutomaticamente: true,
+        estadoFacturacion: legacy.estadoFacturacion,
+        itemsFacturacion: legacy.itemsFacturacion,
+        estado: estadoFinal,
+        rangoEntrega: actualObj.rangoEntrega ?? legacy.rangoEntrega,
+        notificado: actualObj.notificado ?? legacy.notificado,
+        chofer: textoLimpio(actualObj.chofer) || legacy.chofer
+      };
+    },
+    { applyLocally: false }
+  );
+
+  const creado = !existente && resultado.committed;
+  const vinculado = Boolean(existente && resultado.committed && !textoLimpio(existente.data.soporteFacturacionId));
+
+  indice.set(legacy.numeroSoporte, {
+    key: firebaseKey,
+    data: (resultado.snapshot.val() || legacy) as Record<string, any>
+  });
+
+  return { creado, vinculado, omitido: !resultado.committed };
+};
+
+const sincronizarSoportesFacturacion = async (): Promise<{
+  consultados: number;
+  creados: number;
+  vinculados: number;
+  omitidos: number;
+  errores: number;
+}> => {
+  const soportes = await consultarSoportesFacturacion();
+  soportesPorNumero = null;
+  await cargarIndiceSoportes();
+
+  let creados = 0;
+  let vinculados = 0;
+  let omitidos = 0;
+  let errores = 0;
+
+  for (const soporte of soportes) {
+    try {
+      const resultado = await sincronizarUnSoporte(soporte);
+      if (resultado.creado) creados += 1;
+      else if (resultado.vinculado) vinculados += 1;
+      else omitidos += 1;
+    } catch (error) {
+      errores += 1;
+      console.error(
+        `❌ Error sincronizando soporte ${textoLimpio(soporte.numero) || soporte.id}:`,
+        error
+      );
+    }
+  }
+
+  return {
+    consultados: soportes.length,
+    creados,
+    vinculados,
+    omitidos,
+    errores
+  };
+};
+
+
+const mapearEstadoLegacyASoporteERP = (estado: unknown): string | null => {
+  const normalizado = textoLimpio(estado).toLowerCase();
+  if (normalizado === 'entregado') return 'Entregado';
+  if (normalizado === 'resuelto') return 'Reparado / Listo';
+
+  // Mientras el Control lo considere Pendiente no reducimos los estados
+  // detallados del ERP (En revisión, Espera de repuestos, Para NC, etc.).
+  return null;
+};
+
+const fingerprintEstadoSoporteControl = (data: Record<string, any>): string => [
+  textoLimpio(data.estado),
+  textoLimpio(data.chofer),
+  textoLimpio(data.rangoEntrega)
+].join('|');
+
+const actualizarEstadoSoporteEnSupabase = async (
+  soporteFacturacionId: string,
+  cambios: Record<string, any>
+): Promise<void> => {
+  if (!supabaseUrl || !supabasePublishableKey) {
+    throw new Error('Faltan VITE_SUPABASE_URL y/o VITE_SUPABASE_ANON_KEY en Control de Pedidos.');
+  }
+
+  const params = new URLSearchParams();
+  params.set('id', `eq.${soporteFacturacionId}`);
+
+  const respuesta = await fetch(`${supabaseUrl}/rest/v1/soporte?${params.toString()}`, {
+    method: 'PATCH',
+    headers: {
+      apikey: supabasePublishableKey,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal'
+    },
+    body: JSON.stringify(cambios)
+  });
+
+  if (!respuesta.ok) {
+    const detalle = await respuesta.text().catch(() => '');
+    throw new Error(`Supabase respondió ${respuesta.status} actualizando soporte: ${detalle || respuesta.statusText}`);
+  }
+};
+
+const sincronizarEstadosSoportesHaciaFacturacion = async (): Promise<{
+  sincronizados: number;
+  omitidos: number;
+  errores: number;
+}> => {
+  const snapshot = await get(ref(db_realtime, 'soportes'));
+  const data = snapshot.val() || {};
+
+  let sincronizados = 0;
+  let omitidos = 0;
+  let errores = 0;
+
+  for (const [firebaseKey, valor] of Object.entries(data)) {
+    const soporteData = (valor || {}) as Record<string, any>;
+    const soporteFacturacionId = textoLimpio(soporteData.soporteFacturacionId);
+
+    if (!soporteFacturacionId || textoLimpio(soporteData.origen) !== 'sistema_facturacion') continue;
+
+    const estadoERP = mapearEstadoLegacyASoporteERP(soporteData.estado);
+    const chofer = textoLimpio(soporteData.chofer);
+
+    // Solo hay algo que devolver si Control avanzó a Resuelto/Entregado o
+    // asignó un chofer. No enviamos Pendiente para no perder el estado detallado del ERP.
+    if (!estadoERP && !chofer) continue;
+
+    const fingerprint = fingerprintEstadoSoporteControl(soporteData);
+    const syncAnterior = parseObjeto(soporteData.estadoSyncFacturacion);
+    if (textoLimpio(syncAnterior.fingerprint) === fingerprint) {
+      omitidos += 1;
+      continue;
+    }
+
+    const cambios: Record<string, any> = {};
+    if (estadoERP) cambios.estado = estadoERP;
+    if (chofer) cambios.chofer = chofer;
+
+    try {
+      await actualizarEstadoSoporteEnSupabase(soporteFacturacionId, cambios);
+
+      await runTransaction(
+        ref(db_realtime, `soportes/${firebaseKey}/estadoSyncFacturacion`),
+        () => ({
+          fingerprint,
+          sincronizadoEn: new Date().toISOString(),
+          soporteFacturacionId,
+          estadoEnviado: estadoERP,
+          choferEnviado: chofer || null
+        }),
+        { applyLocally: false }
+      );
+
+      sincronizados += 1;
+    } catch (error) {
+      errores += 1;
+      console.error(
+        `❌ Error devolviendo estado del soporte ${textoLimpio(soporteData.numeroSoporte) || firebaseKey} hacia Facturación:`,
+        error
+      );
+    }
+  }
+
+  return { sincronizados, omitidos, errores };
+};
+
 export const sincronizarRemitosPendientesFacturacion = async (): Promise<ResultadoSync> => {
   const pendientes = await consultarPendientesFacturacion();
   let creados = 0;
@@ -631,6 +1009,8 @@ export const sincronizarRemitosPendientesFacturacion = async (): Promise<Resulta
   }
 
   const entregas = await sincronizarConstanciasEntregaHaciaFacturacion();
+  const soportes = await sincronizarSoportesFacturacion();
+  const estadosSoportes = await sincronizarEstadosSoportesHaciaFacturacion();
 
   return {
     consultados: pendientes.length,
@@ -639,7 +1019,13 @@ export const sincronizarRemitosPendientesFacturacion = async (): Promise<Resulta
     variantesCreadas,
     entregasSincronizadas: entregas.sincronizadas,
     entregasOmitidas: entregas.omitidas,
-    errores: errores + entregas.errores
+    soportesConsultados: soportes.consultados,
+    soportesCreados: soportes.creados,
+    soportesVinculados: soportes.vinculados,
+    soportesOmitidos: soportes.omitidos,
+    soportesEstadosSincronizados: estadosSoportes.sincronizados,
+    soportesEstadosOmitidos: estadosSoportes.omitidos,
+    errores: errores + entregas.errores + soportes.errores + estadosSoportes.errores
   };
 };
 
@@ -656,15 +1042,19 @@ export const iniciarSincronizacionRemitosFacturacion = (
     try {
       const resultado = await sincronizarRemitosPendientesFacturacion();
       console.info(
-        `🔄 Sync Facturación → Control: ${resultado.consultados} consultado(s), ` +
-        `${resultado.creados} remito(s) creado(s), ${resultado.omitidos} existente(s), ` +
+        `🔄 Sync Facturación ↔ Control: ` +
+        `${resultado.consultados} remito(s) consultado(s), ${resultado.creados} creado(s), ${resultado.omitidos} existente(s), ` +
         `${resultado.variantesCreadas} configuración(es) de variantes creada(s), ` +
-        `${resultado.entregasSincronizadas} constancia(s) de entrega copiada(s) a Facturación, ` +
+        `${resultado.soportesConsultados} soporte(s) consultado(s), ${resultado.soportesCreados} creado(s), ` +
+        `${resultado.soportesVinculados} vinculado(s), ${resultado.soportesOmitidos} existente(s), ` +
+        `${resultado.soportesEstadosSincronizados} estado(s) de soporte devuelto(s) al ERP, ` +
+        `${resultado.soportesEstadosOmitidos} estado(s) de soporte ya sincronizado(s), ` +
+        `${resultado.entregasSincronizadas} constancia(s) de entrega de remito copiada(s) a Facturación, ` +
         `${resultado.entregasOmitidas} constancia(s) ya sincronizada(s), ` +
         `${resultado.errores} error(es).`
       );
     } catch (error) {
-      console.error('❌ Error sincronizando remitos de Facturación:', error);
+      console.error('❌ Error sincronizando Facturación con Control:', error);
       onError?.(error);
     } finally {
       ejecutando = false;
