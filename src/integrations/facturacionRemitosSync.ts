@@ -661,6 +661,13 @@ const convertirItemSoporteAProductoLegacy = (item: any): string => {
   const descripcion = textoLimpio(item?.descripcion);
   const color = textoLimpio(item?.color);
   const falla = textoLimpio(item?.falla);
+  const esTarea = textoLimpio(item?.tipo).toLowerCase() === 'tarea' || codigo.toUpperCase() === 'TAREA';
+
+  // Las tareas no tienen producto asociado. En la estructura histórica de Firebase
+  // se guardan como una línea descriptiva dentro de `productos[]`.
+  if (esTarea) {
+    return descripcion ? `TAREA - ${descripcion}` : 'TAREA';
+  }
 
   const identificacion = codigo || descripcion || 'EQUIPO';
   const colorUtil = color && color.toLowerCase() !== 'no especificado' ? color : '';
