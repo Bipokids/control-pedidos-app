@@ -25,6 +25,7 @@ type SoporteFacturacion = {
   chofer?: string;
   observaciones?: string;
   historialEstados?: unknown;
+  constanciaEntrega?: unknown;
 };
 
 type ResultadoSync = {
@@ -770,6 +771,23 @@ const sincronizarUnSoporte = async (
 ): Promise<{ creado: boolean; vinculado: boolean; omitido: boolean }> => {
   if (!soporte?.id) return { creado: false, vinculado: false, omitido: true };
 
+  // Un soporte entregado es un registro TERMINAL para Gestión de Despachos.
+  // Puede conservarse para siempre en Facturación, pero si el usuario lo elimina
+  // manualmente de Firebase no debe volver a aparecer.
+  const constanciaERP = parseObjeto(soporte.constanciaEntrega);
+  const soporteCerrado = Boolean(
+    textoLimpio(soporte.estado).toLowerCase() === 'entregado' ||
+    constanciaERP.recibido ||
+    constanciaERP.firma ||
+    constanciaERP.fechaEntrega ||
+    constanciaERP.nombre ||
+    constanciaERP.dni
+  );
+
+  if (soporteCerrado) {
+    return { creado: false, vinculado: false, omitido: true };
+  }
+
   const legacy = convertirSoporteFacturacionALegacy(soporte);
   if (!legacy.numeroSoporte || legacy.productos.length === 0) {
     return { creado: false, vinculado: false, omitido: true };
@@ -922,18 +940,22 @@ const construirConstanciaEntregaSoporte = (
 
   const tieneConstancia = Boolean(
     estado.toLowerCase() === 'entregado' ||
-    fechaEntrega || firma.firma || firma.nombre || firma.dni || firma.tipo
+    fechaEntrega ||
+    firma.firma ||
+    firma.nombre ||
+    firma.dni ||
+    firma.tipo
   );
+
   if (!tieneConstancia) return null;
 
-  const firmaDataUrl = normalizarFirmaDataUrl(firma.firma);
   return {
     recibido: true,
-    tipo: textoLimpio(firma.tipo) || (firmaDataUrl ? 'Cliente' : 'Entrega'),
+    tipo: textoLimpio(firma.tipo) || (firma.firma ? 'Cliente' : 'Entrega'),
     fechaEntrega: fechaEntrega || null,
     nombre: textoLimpio(firma.nombre) || null,
     dni: textoLimpio(firma.dni) || null,
-    firma: firmaDataUrl || null,
+    firma: normalizarFirmaDataUrl(firma.firma) || null,
     chofer: textoLimpio(data.chofer) || null,
     responsable: textoLimpio(data.responsable) || null,
     rangoEntrega: textoLimpio(data.rangoEntrega) || null,
@@ -994,8 +1016,8 @@ const sincronizarEstadosSoportesHaciaFacturacion = async (): Promise<{
     const chofer = textoLimpio(soporteData.chofer);
     const constanciaEntrega = construirConstanciaEntregaSoporte(firebaseKey, soporteData);
 
-    // Devolvemos al ERP si Control avanzó a Resuelto/Entregado, asignó un chofer
-    // o registró una constancia de entrega/firma.
+    // Devolvemos al ERP cualquier avance operativo y, especialmente,
+    // la constancia histórica de recepción/firma.
     if (!estadoERP && !chofer && !constanciaEntrega) continue;
 
     const fingerprint = fingerprintEstadoSoporteControl(soporteData);
@@ -1069,8 +1091,15 @@ export const sincronizarRemitosPendientesFacturacion = async (): Promise<Resulta
   }
 
   const entregas = await sincronizarConstanciasEntregaHaciaFacturacion();
-  const soportes = await sincronizarSoportesFacturacion();
+
+  // IMPORTANTE: primero preservamos en Facturación el estado/firma de los
+  // soportes existentes en Firebase. Recién después evaluamos si corresponde
+  // enviar soportes desde Facturación hacia Despachos.
+  //
+  // De esta manera, un soporte firmado pasa a ser terminal antes de que
+  // sincronizarSoportesFacturacion pueda intentar recrearlo.
   const estadosSoportes = await sincronizarEstadosSoportesHaciaFacturacion();
+  const soportes = await sincronizarSoportesFacturacion();
 
   return {
     consultados: pendientes.length,
