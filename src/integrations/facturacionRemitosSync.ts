@@ -889,11 +889,60 @@ const mapearEstadoLegacyASoporteERP = (estado: unknown): string | null => {
   return null;
 };
 
-const fingerprintEstadoSoporteControl = (data: Record<string, any>): string => [
-  textoLimpio(data.estado),
-  textoLimpio(data.chofer),
-  textoLimpio(data.rangoEntrega)
-].join('|');
+const fingerprintEstadoSoporteControl = (data: Record<string, any>): string => {
+  const firma = parseObjeto(data.clienteFirma);
+  const cantidades = parseObjeto(data.cantidadesEntregadas);
+  const noRecibidos = parseObjeto(data.noRecibidos);
+
+  return [
+    textoLimpio(data.estado),
+    textoLimpio(data.chofer),
+    textoLimpio(data.rangoEntrega),
+    textoLimpio(data.fechaEntrega),
+    textoLimpio(data.responsable),
+    textoLimpio(firma.tipo),
+    textoLimpio(firma.nombre),
+    textoLimpio(firma.dni),
+    textoLimpio(firma.firma).length,
+    JSON.stringify(cantidades),
+    JSON.stringify(noRecibidos)
+  ].join('|');
+};
+
+const construirConstanciaEntregaSoporte = (
+  firebaseKey: string,
+  data: Record<string, any>
+): Record<string, any> | null => {
+  const soporteFacturacionId = textoLimpio(data.soporteFacturacionId);
+  if (!soporteFacturacionId) return null;
+
+  const firma = parseObjeto(data.clienteFirma);
+  const fechaEntrega = textoLimpio(data.fechaEntrega);
+  const estado = textoLimpio(data.estado);
+
+  const tieneConstancia = Boolean(
+    estado.toLowerCase() === 'entregado' ||
+    fechaEntrega || firma.firma || firma.nombre || firma.dni || firma.tipo
+  );
+  if (!tieneConstancia) return null;
+
+  const firmaDataUrl = normalizarFirmaDataUrl(firma.firma);
+  return {
+    recibido: true,
+    tipo: textoLimpio(firma.tipo) || (firmaDataUrl ? 'Cliente' : 'Entrega'),
+    fechaEntrega: fechaEntrega || null,
+    nombre: textoLimpio(firma.nombre) || null,
+    dni: textoLimpio(firma.dni) || null,
+    firma: firmaDataUrl || null,
+    chofer: textoLimpio(data.chofer) || null,
+    responsable: textoLimpio(data.responsable) || null,
+    rangoEntrega: textoLimpio(data.rangoEntrega) || null,
+    cantidadesEntregadas: parseObjeto(data.cantidadesEntregadas),
+    noRecibidos: parseObjeto(data.noRecibidos),
+    soporteControlId: firebaseKey,
+    sincronizadoDesdeControlEn: new Date().toISOString()
+  };
+};
 
 const actualizarEstadoSoporteEnSupabase = async (
   soporteFacturacionId: string,
@@ -943,10 +992,11 @@ const sincronizarEstadosSoportesHaciaFacturacion = async (): Promise<{
 
     const estadoERP = mapearEstadoLegacyASoporteERP(soporteData.estado);
     const chofer = textoLimpio(soporteData.chofer);
+    const constanciaEntrega = construirConstanciaEntregaSoporte(firebaseKey, soporteData);
 
-    // Solo hay algo que devolver si Control avanzó a Resuelto/Entregado o
-    // asignó un chofer. No enviamos Pendiente para no perder el estado detallado del ERP.
-    if (!estadoERP && !chofer) continue;
+    // Devolvemos al ERP si Control avanzó a Resuelto/Entregado, asignó un chofer
+    // o registró una constancia de entrega/firma.
+    if (!estadoERP && !chofer && !constanciaEntrega) continue;
 
     const fingerprint = fingerprintEstadoSoporteControl(soporteData);
     const syncAnterior = parseObjeto(soporteData.estadoSyncFacturacion);
@@ -958,6 +1008,7 @@ const sincronizarEstadosSoportesHaciaFacturacion = async (): Promise<{
     const cambios: Record<string, any> = {};
     if (estadoERP) cambios.estado = estadoERP;
     if (chofer) cambios.chofer = chofer;
+    if (constanciaEntrega) cambios.constanciaEntrega = constanciaEntrega;
 
     try {
       await actualizarEstadoSoporteEnSupabase(soporteFacturacionId, cambios);
@@ -969,7 +1020,9 @@ const sincronizarEstadosSoportesHaciaFacturacion = async (): Promise<{
           sincronizadoEn: new Date().toISOString(),
           soporteFacturacionId,
           estadoEnviado: estadoERP,
-          choferEnviado: chofer || null
+          choferEnviado: chofer || null,
+          constanciaEntregaEnviada: Boolean(constanciaEntrega),
+          fechaEntregaEnviada: constanciaEntrega?.fechaEntrega || null
         }),
         { applyLocally: false }
       );
@@ -1054,7 +1107,7 @@ export const iniciarSincronizacionRemitosFacturacion = (
         `${resultado.variantesCreadas} configuración(es) de variantes creada(s), ` +
         `${resultado.soportesConsultados} soporte(s) consultado(s), ${resultado.soportesCreados} creado(s), ` +
         `${resultado.soportesVinculados} vinculado(s), ${resultado.soportesOmitidos} existente(s), ` +
-        `${resultado.soportesEstadosSincronizados} estado(s) de soporte devuelto(s) al ERP, ` +
+        `${resultado.soportesEstadosSincronizados} actualización(es) de soporte (estado/firma) devuelta(s) al ERP, ` +
         `${resultado.soportesEstadosOmitidos} estado(s) de soporte ya sincronizado(s), ` +
         `${resultado.entregasSincronizadas} constancia(s) de entrega de remito copiada(s) a Facturación, ` +
         `${resultado.entregasOmitidas} constancia(s) ya sincronizada(s), ` +
