@@ -818,6 +818,43 @@ const sincronizarUnSoporte = async (
       const actualObj = (actual || {}) as Record<string, any>;
       const estadoFinal = resolverEstadoSoporteFirebase(actualObj.estado, legacy.estado);
 
+      // Resolver el chofer de forma BIDIRECCIONAL.
+      //
+      // estadoSyncFacturacion.choferEnviado representa el último chofer que RTDB
+      // devolvió correctamente al ERP:
+      //
+      // - Si RTDB sigue teniendo ese mismo valor pero Supabase cambió, significa
+      //   que el cambio nació en Facturación -> gana legacy.chofer y se actualiza RTDB.
+      //
+      // - Si RTDB difiere del último valor enviado al ERP, significa que el cambio
+      //   nació en Gestión de Despachos -> preservamos RTDB para que el ciclo inverso
+      //   lo copie a Facturación inmediatamente después.
+      //
+      // Esto permite cambiar DANI -> ENZO desde cualquiera de los dos sistemas
+      // sin que el valor viejo del otro lado vuelva a pisarlo.
+      const syncAnterior = parseObjeto(actualObj.estadoSyncFacturacion);
+      const choferRTDB = textoLimpio(actualObj.chofer);
+      const choferERP = textoLimpio(legacy.chofer);
+      const tieneReferenciaChoferAnterior =
+        Object.prototype.hasOwnProperty.call(syncAnterior, 'choferEnviado');
+      const ultimoChoferEnviadoAlERP = textoLimpio(syncAnterior.choferEnviado);
+
+      let choferFinal = choferERP;
+
+      if (tieneReferenciaChoferAnterior) {
+        const rtdbCambioDesdeUltimoSync =
+          choferRTDB !== ultimoChoferEnviadoAlERP;
+
+        choferFinal = rtdbCambioDesdeUltimoSync
+          ? choferRTDB
+          : choferERP;
+      } else if (choferRTDB && choferRTDB !== choferERP) {
+        // Compatibilidad con registros anteriores al marcador choferEnviado:
+        // si ya existe una asignación distinta en Despachos, no la pisamos antes
+        // de que el sentido RTDB -> Facturación tenga oportunidad de conservarla.
+        choferFinal = choferRTDB;
+      }
+
       // Actualizamos datos descriptivos provenientes del ERP, pero preservamos
       // toda la información operativa que pertenece a Gestión de Soportes:
       // rangoEntrega, notificado, firma, entrega, responsable, etc.
@@ -839,7 +876,7 @@ const sincronizarUnSoporte = async (
         estado: estadoFinal,
         rangoEntrega: actualObj.rangoEntrega ?? legacy.rangoEntrega,
         notificado: actualObj.notificado ?? legacy.notificado,
-        chofer: textoLimpio(actualObj.chofer) || legacy.chofer
+        chofer: choferFinal
       };
     },
     { applyLocally: false }
