@@ -1,9 +1,9 @@
-// Diagnóstico temporal de autenticación API Puro ERP.
-// No modifica datos. Sólo intenta leer /api/delivery-notes.
+// Diagnóstico V2 de autenticación de Puro ERP.
+// Sólo realiza GETs de lectura. No modifica datos.
 //
-// Variables de entorno:
-// PURO_API_KEY=...
-// PURO_BASE_URL=https://dev.puroerp.com   (opcional)
+// Env:
+// PURO_API_KEY=pk_live_...
+// PURO_BASE_URL=https://dev.puroerp.com  (opcional)
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -16,7 +16,53 @@ const json = (body, status = 200) =>
 
 const texto = (valor) => String(valor ?? '').trim();
 
-const resumirRespuesta = async (response) => {
+const sanitizar = (valor, profundidad = 0) => {
+  if (profundidad > 5) return '[max-depth]';
+
+  if (valor === null || valor === undefined) return valor;
+
+  if (Array.isArray(valor)) {
+    return valor.slice(0, 20).map(item => sanitizar(item, profundidad + 1));
+  }
+
+  if (typeof valor === 'object') {
+    const salida = {};
+
+    for (const [clave, contenido] of Object.entries(valor)) {
+      const nombre = clave.toLowerCase();
+
+      // Nunca devolver credenciales, cookies o tokens si aparecieran en errores.
+      if (
+        nombre.includes('token') ||
+        nombre.includes('secret') ||
+        nombre.includes('password') ||
+        nombre.includes('authorization') ||
+        nombre.includes('cookie') ||
+        nombre === 'key' ||
+        nombre === 'apikey' ||
+        nombre === 'api_key'
+      ) {
+        salida[clave] = '[redacted]';
+      } else {
+        salida[clave] = sanitizar(contenido, profundidad + 1);
+      }
+    }
+
+    return salida;
+  }
+
+  if (typeof valor === 'string') {
+    // Evita que una respuesta inesperada exponga una credencial pk_live_/whsec_.
+    return valor
+      .replace(/pk_live_[a-zA-Z0-9_-]+/g, 'pk_live_[redacted]')
+      .replace(/whsec_[a-zA-Z0-9_-]+/g, 'whsec_[redacted]')
+      .slice(0, 2000);
+  }
+
+  return valor;
+};
+
+const leerRespuesta = async (response) => {
   const contentType = response.headers.get('content-type') || '';
   let body = null;
 
@@ -26,41 +72,21 @@ const resumirRespuesta = async (response) => {
     } else {
       body = await response.text();
     }
-  } catch {
-    body = null;
+  } catch (error) {
+    body = {
+      parseError: error?.message || 'response_parse_failed'
+    };
   }
 
-  const resumen = {
+  return {
     status: response.status,
     ok: response.ok,
-    contentType
+    contentType,
+    body: sanitizar(body)
   };
-
-  if (body && typeof body === 'object' && !Array.isArray(body)) {
-    resumen.responseKeys = Object.keys(body);
-
-    if (Array.isArray(body.data)) {
-      resumen.dataCount = body.data.length;
-      resumen.firstItemKeys =
-        body.data[0] && typeof body.data[0] === 'object'
-          ? Object.keys(body.data[0])
-          : [];
-    }
-
-    if (body.meta && typeof body.meta === 'object') {
-      resumen.meta = body.meta;
-    }
-
-    if (body.error) resumen.error = String(body.error);
-    if (body.message) resumen.message = String(body.message);
-  } else if (typeof body === 'string') {
-    resumen.bodyPreview = body.slice(0, 180);
-  }
-
-  return resumen;
 };
 
-const probar = async ({ url, headers, modo }) => {
+const probar = async ({ url, modo, headers }) => {
   try {
     const response = await fetch(url, {
       method: 'GET',
@@ -68,66 +94,65 @@ const probar = async ({ url, headers, modo }) => {
         Accept: 'application/json',
         ...headers
       },
-      cache: 'no-store'
+      cache: 'no-store',
+      redirect: 'manual'
     });
 
     return {
       modo,
-      ...(await resumirRespuesta(response))
+      ...(await leerRespuesta(response))
     };
   } catch (error) {
     return {
       modo,
       status: 0,
       ok: false,
-      error: error?.message || 'fetch_failed'
+      body: {
+        fetchError: error?.message || 'fetch_failed'
+      }
     };
   }
 };
 
 export async function GET() {
   const apiKey = texto(process.env.PURO_API_KEY);
-  const baseUrl =
-    texto(process.env.PURO_BASE_URL) || 'https://dev.puroerp.com';
+  const baseUrl = texto(process.env.PURO_BASE_URL) || 'https://dev.puroerp.com';
 
   if (!apiKey) {
-    return json(
-      {
-        ok: false,
-        error: 'PURO_API_KEY_not_configured'
-      },
-      500
-    );
+    return json({
+      ok: false,
+      error: 'PURO_API_KEY_not_configured'
+    }, 500);
   }
 
   const url =
     `${baseUrl.replace(/\/+$/, '')}` +
     '/api/delivery-notes?page=1&limit=1&sort=issueDate%3Adesc';
 
+  // Sólo mostramos el prefijo público/identificable de la clave configurada.
+  // Sirve para verificar que Vercel está usando la clave esperada sin exponerla.
+  const configuredKeyPrefix = apiKey.slice(0, 16);
+
   const intentos = [
     {
       modo: 'authorization_bearer',
-      headers: {
-        Authorization: `Bearer ${apiKey}`
-      }
+      headers: { Authorization: `Bearer ${apiKey}` }
     },
     {
       modo: 'x_api_key',
-      headers: {
-        'x-api-key': apiKey
-      }
+      headers: { 'x-api-key': apiKey }
     },
     {
-      modo: 'api_key_header',
-      headers: {
-        'api-key': apiKey
-      }
+      modo: 'x_puro_api_key',
+      headers: { 'x-puro-api-key': apiKey }
+    },
+    {
+      modo: 'authorization_api_key',
+      headers: { Authorization: `ApiKey ${apiKey}` }
     },
     {
       modo: 'authorization_raw',
-      headers: {
-        Authorization: apiKey
-      }
+      headers: { Authorization: apiKey }
     }
   ];
 
@@ -143,19 +168,9 @@ export async function GET() {
     resultados.push(resultado);
 
     if (resultado.ok) {
-      console.info(
-        '[PURO API TEST]',
-        JSON.stringify({
-          ok: true,
-          authMode: resultado.modo,
-          status: resultado.status,
-          dataCount: resultado.dataCount ?? null,
-          firstItemKeys: resultado.firstItemKeys ?? []
-        })
-      );
-
       return json({
         ok: true,
+        configuredKeyPrefix,
         authMode: resultado.modo,
         endpoint: '/api/delivery-notes',
         result: resultado
@@ -163,26 +178,11 @@ export async function GET() {
     }
   }
 
-  console.warn(
-    '[PURO API TEST] Ningún esquema de autenticación probado funcionó.',
-    JSON.stringify(
-      resultados.map(r => ({
-        modo: r.modo,
-        status: r.status,
-        error: r.error || null,
-        message: r.message || null
-      }))
-    )
-  );
-
-  return json(
-    {
-      ok: false,
-      endpoint: '/api/delivery-notes',
-      message:
-        'La API key no autenticó con los esquemas habituales probados.',
-      attempts: resultados
-    },
-    502
-  );
+  return json({
+    ok: false,
+    configuredKeyPrefix,
+    endpoint: '/api/delivery-notes',
+    message: 'Ningún esquema probado autenticó contra este endpoint.',
+    attempts: resultados
+  }, 502);
 }
